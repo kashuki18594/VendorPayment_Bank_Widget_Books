@@ -1,0 +1,26 @@
+{
+  "locale": [
+    "en"
+  ],
+  "service": "FINANCE",
+  "whiteListedDomains": [],
+  "modules": {
+    "widgets": [
+      {
+        "location": "webtab",
+        "name": "Vendor Payments",
+        "url": "/app/widget.html",
+        "logo": "/app/img/logo.png"
+      }
+    ]
+  },
+  "config": [],
+  "usedConnections": [
+    {
+      "connection_link_name": "books",
+      "connectionLinkName": "books",
+      "connectorName": "books",
+      "scope": "ZohoBooks.fullaccess.all"
+    }
+  ]
+}

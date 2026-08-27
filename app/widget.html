@@ -1,0 +1,2202 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Draft Payments Made</title>
+	<script src="https://static.zohocdn.com/zohofinance/v1.0/zf_sdk.js"></script>
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+	<style>
+		:root {
+			--indusind-red: #842220;
+			--indusind-red-dark: #691b19;
+			--indusind-gold: #c69214;
+			--page-bg: #f4f5f7;
+			--card-border: #e6dada;
+			--text: #303030;
+			--muted: #737373;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		body {
+			margin: 0;
+			padding: 18px;
+			background: var(--page-bg);
+			color: var(--text);
+			font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+			font-size: 14px;
+		}
+
+		.page-shell {
+			max-width: 1100px;
+			margin: 0 auto;
+		}
+
+		.bank-card {
+			background: #fff;
+			border: 1px solid var(--card-border);
+			border-radius: 8px;
+			overflow: hidden;
+			box-shadow: 0 3px 12px rgba(0, 0, 0, .05);
+		}
+
+		.bank-header {
+			background: var(--indusind-red);
+			color: #fff;
+			padding: 13px 18px;
+			border-bottom: 3px solid var(--indusind-gold);
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+		}
+
+		.bank-header h5 {
+			margin: 0;
+			font-size: 16px;
+			font-weight: 650;
+		}
+
+		.bank-badge {
+			background: var(--indusind-gold);
+			color: #151515;
+			padding: 4px 10px;
+			border-radius: 4px;
+			font-size: 11px;
+			font-weight: 700;
+		}
+
+		.filter-body {
+			padding: 18px;
+		}
+
+		.form-label {
+			font-size: 12px;
+			font-weight: 650;
+			margin-bottom: 5px;
+			color: #444;
+		}
+
+		.form-select {
+			min-height: 36px;
+			border-color: #d6c9c9;
+			border-radius: 5px;
+			font-size: 13px;
+		}
+
+		.form-select:focus {
+			border-color: var(--indusind-red);
+			box-shadow: 0 0 0 .18rem rgba(132, 34, 32, .12);
+		}
+
+		.btn-indusind {
+			min-height: 36px;
+			background: var(--indusind-red);
+			border: 1px solid var(--indusind-red);
+			color: #fff;
+			font-weight: 600;
+			border-radius: 5px;
+		}
+
+		.btn-indusind:hover {
+			background: var(--indusind-red-dark);
+			color: #fff;
+		}
+
+		.btn-reset {
+			min-height: 36px;
+			border: 1px solid #cdbebe;
+			color: #555;
+			background: #fff;
+			border-radius: 5px;
+		}
+
+		.section-card {
+			margin-top: 14px;
+			background: #fff;
+			border: 1px solid var(--card-border);
+			border-radius: 8px;
+			box-shadow: 0 3px 12px rgba(0, 0, 0, .04);
+			overflow: hidden;
+		}
+
+		.section-head {
+			padding: 12px 16px;
+			border-bottom: 1px solid #eee;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 12px;
+		}
+
+		.section-head h6 {
+			margin: 0;
+			font-size: 14px;
+			font-weight: 700;
+		}
+
+		#countBadge {
+			background: #f3e7e6 !important;
+			color: var(--indusind-red) !important;
+			border: 1px solid #e5cdcb;
+			font-weight: 700;
+		}
+
+		#bulkBar {
+			display: none;
+			padding: 9px 16px;
+			background: #faf7f7;
+			border-bottom: 1px solid #eee;
+			align-items: center;
+			justify-content: space-between;
+			gap: 10px;
+		}
+
+		.form-check-input:checked {
+			background-color: var(--indusind-red);
+			border-color: var(--indusind-red);
+		}
+
+		#draftList {
+			margin: 0;
+		}
+
+		#draftList .list-group-item {
+			border-left: 0;
+			border-right: 0;
+			padding: 11px 16px;
+			display: grid;
+			grid-template-columns: 28px minmax(0, 1fr) auto auto auto;
+			gap: 12px;
+			align-items: center;
+		}
+
+		#draftList .list-group-item:first-child {
+			border-top: 0;
+		}
+
+		.pm-info {
+			min-width: 0;
+		}
+
+		.pm-number {
+			font-weight: 650;
+			color: #333;
+		}
+
+		.pm-vendor {
+			color: var(--muted);
+			font-size: 12px;
+			margin-top: 2px;
+		}
+
+		.pm-mode {
+			display: inline-block;
+			margin-left: 5px;
+			color: var(--indusind-red);
+			font-size: 10px;
+			font-weight: 700;
+			text-transform: uppercase;
+		}
+
+		.pm-amount {
+			font-weight: 700;
+			white-space: nowrap;
+		}
+
+		.row-pay-btn {
+			min-width: 58px;
+			border-color: var(--indusind-red);
+			color: var(--indusind-red);
+		}
+
+		.row-pay-btn:hover {
+			background: var(--indusind-red);
+			border-color: var(--indusind-red);
+			color: #fff;
+		}
+
+		#pagination {
+			padding: 9px 16px;
+			border-top: 1px solid #eee;
+		}
+
+		.page-link {
+			color: var(--indusind-red);
+		}
+
+		.page-item.active .page-link {
+			background: var(--indusind-red);
+			border-color: var(--indusind-red);
+		}
+
+		#loading {
+			padding: 28px !important;
+			color: var(--muted);
+		}
+
+		#empty {
+			margin: 14px;
+		}
+
+		.toast-header-indusind {
+			background: var(--indusind-red);
+			color: #fff;
+		}
+
+		.toast-indusind {
+			border-left: 4px solid var(--indusind-gold);
+		}
+
+		@media (max-width: 700px) {
+			body {
+				padding: 10px;
+			}
+
+			.filter-body {
+				padding: 13px;
+			}
+
+			#draftList .list-group-item {
+				grid-template-columns: 26px minmax(0, 1fr) auto;
+			}
+
+			.row-pay-btn {
+				grid-column: 3;
+			}
+
+			.pm-amount {
+				grid-column: 2 / 3;
+			}
+		}
+
+		.bank-status {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 22px;
+			height: 22px;
+			border-radius: 50%;
+			font-size: 12px;
+			font-weight: 800;
+			margin-left: 6px;
+			cursor: pointer;
+			border: 0
+		}
+
+		.bank-status-ok {
+			background: #dff4e5;
+			color: #198754
+		}
+
+		.bank-status-error {
+			background: #fde2e2;
+			color: #dc3545
+		}
+
+		.bank-status-loading {
+			background: #f1f1f1;
+			color: #777
+		}
+
+		.vendor-bank-row {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+			margin-top: 2px
+		}
+
+		.header-actions {
+			display: flex;
+			align-items: center;
+			gap: 8px
+		}
+
+		.btn-refresh {
+			border: 1px solid rgba(255, 255, 255, .55);
+			background: transparent;
+			color: #fff;
+			border-radius: 5px;
+			min-height: 32px;
+			padding: 4px 10px;
+			font-weight: 600
+		}
+
+		.btn-refresh:hover {
+			background: rgba(255, 255, 255, .12);
+			color: #fff
+		}
+
+		.btn-refresh.spinning .refresh-icon {
+			display: inline-block;
+			animation: spin .8s linear infinite
+		}
+
+		@keyframes spin {
+			to {
+				transform: rotate(360deg)
+			}
+		}
+
+		.payment-status {
+			display: inline-flex;
+			align-items: center;
+			gap: 4px;
+			border-radius: 12px;
+			padding: 3px 8px;
+			font-size: 11px;
+			font-weight: 700;
+			white-space: nowrap
+		}
+
+		.payment-status.success {
+			background: #dff4e5;
+			color: #198754
+		}
+
+		.payment-status.failed {
+			background: #fde2e2;
+			color: #dc3545
+		}
+
+		.payment-status.pending {
+			background: #fff3cd;
+			color: #856404
+		}
+
+		.payment-status.unknown {
+			background: #f1f1f1;
+			color: #777
+		}
+
+		.status-wrap {
+			display: flex;
+			justify-content: flex-end;
+			align-items: center;
+			min-width: 180px;
+		}
+
+		.status-wrap small {
+			line-height: 1.2;
+			word-break: break-word;
+		}
+
+		.status-actions {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			justify-content: flex-end;
+		}
+
+		.row-status-btn {
+			min-width: 82px;
+			font-size: 11px;
+			border-color: var(--indusind-red);
+			color: var(--indusind-red);
+		}
+
+		.row-status-btn:hover {
+			background: var(--indusind-red);
+			color: #fff;
+		}
+	</style>
+</head>
+
+<body>
+	<div class="page-shell">
+
+		<div class="bank-card">
+			<div class="bank-header">
+				<h5>Settings</h5>
+				<div class="header-actions">
+					<button type="button" id="refreshBtn" class="btn-refresh" title="Refresh payments"
+						onclick="refreshPayments()">
+						<span class="refresh-icon">↻</span> Refresh
+					</button>
+					<span class="bank-badge">INDUSIND BANK</span>
+				</div>
+			</div>
+
+			<div class="filter-body">
+				<form id="filterForm">
+					<div class="row g-3 align-items-end">
+						<div class="col-md-3">
+							<label for="maker" class="form-label">Maker</label>
+							<select class="form-select" id="maker">
+								<option value="">-Select-</option>
+								<option value="NAS002">Nassem (NAS002)</option>
+								<option value="DAL007">Dalvinder (DAL007)</option>
+							</select>
+						</div>
+
+						<div class="col-md-3">
+							<label for="authorizer" class="form-label">Authorizer</label>
+							<select class="form-select" id="authorizer">
+								<option value="">-Select-</option>
+								<option value="SAN006">SANJAY KUMAR (SAN006)</option>
+								<option value="SIT004">Sitaram Sankararaman (SIT004)</option>
+							</select>
+						</div>
+
+						<div class="col-md-3">
+							<label for="bank" class="form-label">Bank <span
+									style="color:var(--indusind-red)">*</span></label>
+							<select class="form-select" id="bank">
+								<option value="">-Select-</option>
+								<option value="200003169036">200003169036 (WORKPLACE SYNERGIES PVT LTD)</option>
+								<option value="650014125905">650014125905 (WORKPLACE SYNERGIES PVT LTD)</option>
+								<option value="200008620952">200008620952 (WORKPLACE SYNERGIES PVT LTD)</option>
+							</select>
+						</div>
+
+						<div class="col-md-3 d-flex gap-2">
+							<button type="button" class="btn btn-indusind flex-grow-1" id="saveFilterBtn">Apply</button>
+							<button type="button" class="btn btn-reset" id="resetFilterBtn">Reset</button>
+						</div>
+					</div>
+				</form>
+			</div>
+		</div>
+
+		<div class="section-card">
+			<div class="section-head">
+				<div class="d-flex align-items-center gap-2">
+					<h6>Total Payments</h6>
+					<span class="small text-muted">Payment Status</span>
+				</div>
+				<div class="d-flex align-items-center gap-2">
+                    <span id="schedulerBadge" class="badge rounded-pill text-bg-secondary">Auto status: waiting</span>
+                    <span id="countBadge" class="badge rounded-pill" style="display:none;"></span>
+                </div>
+			</div>
+
+			<div id="loading">
+				<div class="text-center">
+					<div class="spinner-border spinner-border-sm me-2" role="status"></div>
+					Loading...
+				</div>
+			</div>
+
+			<div id="empty" class="alert alert-light border text-center" style="display:none;"></div>
+
+			<div id="bulkBar">
+				<div class="form-check mb-0">
+					<input class="form-check-input" type="checkbox" id="selectAllChk">
+					<label class="form-check-label small" for="selectAllChk">Select all on page</label>
+				</div>
+				<div class="d-flex gap-2">
+					<button id="fetchSelectedStatusBtn" class="btn btn-sm btn-outline-secondary" disabled>
+						Fetch Status (<span id="selectedStatusCount">0</span>)
+					</button>
+					<button id="paySelectedBtn" class="btn btn-sm btn-indusind" disabled>
+						Pay Selected (<span id="selectedCount">0</span>)
+					</button>
+				</div>
+			</div>
+
+			<ul id="draftList" class="list-group list-group-flush"></ul>
+
+			<nav id="pagination" style="display:none;" aria-label="Draft payments pagination">
+				<ul class="pagination pagination-sm justify-content-between mb-0">
+					<li class="page-item" id="prevItem"><button class="page-link" id="prevBtn">&larr; Prev</button></li>
+					<li class="page-item disabled"><span class="page-link border-0 bg-transparent text-muted"
+							id="pageInfo"></span></li>
+					<li class="page-item" id="nextItem"><button class="page-link" id="nextBtn">Next &rarr;</button></li>
+				</ul>
+			</nav>
+		</div>
+	</div>
+
+	<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:1100;">
+		<div id="filterToast" class="toast toast-indusind shadow" role="alert" aria-live="assertive" aria-atomic="true">
+			<div class="toast-header toast-header-indusind">
+				<strong class="me-auto">IndusInd Bank</strong>
+				<small class="text-white-50">Just now</small>
+				<button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"
+					aria-label="Close"></button>
+			</div>
+			<div class="toast-body" id="filterToastMsg">Filter settings saved successfully.</div>
+		</div>
+	</div>
+
+	<div id="toast" class="position-fixed bottom-0 end-0 p-3" style="z-index:1080;">
+		<div id="toastBox" class="toast align-items-center text-white border-0" role="alert">
+			<div class="d-flex">
+				<div class="toast-body" id="toastMsg"></div>
+				<button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+			</div>
+		</div>
+	</div>
+
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+	<script>
+
+		let orgId = "60040513327";
+		const PAGE_SIZE = 5;
+
+		let allDraftPayments = [];
+		let currentPage = 1;
+		let selectedIds = new Set();
+
+		// Payment status returned by Catalyst, keyed by Zoho payment_id.
+		let paymentStatusMap = new Map();
+		const PAYMENT_STATUS_KEY = "indusindPaymentStatus";
+        const STATUS_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+        let statusSchedulerTimer = null;
+        let statusSchedulerRunning = false;
+
+		let vendorCache = new Map();
+
+		let vendorBankState = new Map();
+
+		function getBankStatus(paymentId) {
+			const state = vendorBankState.get(String(paymentId));
+
+			if (!state) {
+				return `<span class="bank-status bank-status-loading" title="Checking bank...">...</span>`;
+			}
+
+			if (!state.exists) {
+				return `<span class="bank-status bank-status-error" title="${state.error || "Bank account not exists"}">!</span>`;
+			}
+
+			return `<button type="button" class="bank-status bank-status-ok bank-info-btn"
+    data-payment-id="${paymentId}" title="View bank details">i</button>`;
+		}
+
+		async function checkVendorBank(payment) {
+			const paymentId = String(payment.payment_id);
+
+			try {
+				if (!payment.vendor_id) {
+					vendorBankState.set(paymentId, { exists: false, error: "Vendor ID is missing." });
+					return;
+				}
+
+				const vendor = await fetchVendorDetails(payment.vendor_id);
+				const bank = getVendorBankAccount(vendor);
+
+				if (!bank) {
+					vendorBankState.set(paymentId, {
+						exists: false,
+						error: `Bank account not exists for ${vendor.contact_name || payment.vendor_name || "vendor"}.`,
+						vendor
+					});
+					return;
+				}
+
+				vendorBankState.set(paymentId, { exists: true, vendor, account: bank });
+			} catch (error) {
+				vendorBankState.set(paymentId, {
+					exists: false,
+					error: error.message || "Bank account not found."
+				});
+			}
+		}
+
+		async function checkPageVendorBanks() {
+			const pageItems = getPageItems();
+			pageItems.forEach(payment => vendorBankState.delete(String(payment.payment_id)));
+			renderPage();
+
+			await Promise.all(pageItems.map(payment => checkVendorBank(payment)));
+
+			renderPage();
+		}
+
+
+		function fetchVendorDetails(vendorId) {
+			if (!vendorId) return Promise.reject(new Error("Vendor ID is missing."));
+			if (vendorCache.has(String(vendorId))) return Promise.resolve(vendorCache.get(String(vendorId)));
+
+			const options = {
+				url: `https://www.zohoapis.in/books/v3/contacts/${vendorId}`,
+				method: "GET",
+				url_query: [{ key: "organization_id", value: orgId }],
+				connection_link_name: "books"
+			};
+
+			return ZFAPPS.request(options).then(response => {
+				const body = typeof response.data.body === "string"
+					? JSON.parse(response.data.body) : response.data.body;
+				if (!body || body.code !== 0 || !body.contact) {
+					throw new Error(body?.message || `Could not fetch vendor ${vendorId}.`);
+				}
+				vendorCache.set(String(vendorId), body.contact);
+				return body.contact;
+			});
+		}
+
+		function getVendorBankAccount(vendor) {
+			const accounts = Array.isArray(vendor?.bank_accounts)
+				? vendor.bank_accounts.filter(a => a.status === "active") : [];
+			return accounts.find(a => a.is_primary === true) || accounts[0] || null;
+		}
+
+		async function enrichPaymentWithVendorBank(payment) {
+			if (!payment.vendor_id) {
+				throw new Error(`Vendor ID is missing for payment ${payment.payment_number || payment.payment_id}.`);
+			}
+
+			const vendor = await fetchVendorDetails(payment.vendor_id);
+			const bankAccount = getVendorBankAccount(vendor);
+
+			if (!bankAccount) {
+				throw new Error(`No active bank account found for vendor "${vendor.contact_name || payment.vendor_name || payment.vendor_id}".`);
+			}
+
+			return {
+				...payment,
+				vendorDetails: vendor,
+				vendorBankAccount: bankAccount,
+				benCode: payment.benCode || bankAccount.account_id || "",
+				benName: bankAccount.beneficiary_name || vendor.contact_name || payment.vendor_name || "",
+				benIFSC: bankAccount.routing_number || "",
+				benAcctNo: bankAccount.account_number || "",
+				benEmail: vendor.email || payment.vendor_email || "",
+				benMobile: vendor.mobile || payment.vendor_mobile || ""
+			};
+		}
+
+
+
+		function loadPaymentStatuses() {
+			try {
+				const saved = localStorage.getItem(PAYMENT_STATUS_KEY);
+				if (!saved) return;
+				const data = JSON.parse(saved);
+				paymentStatusMap = new Map(Object.entries(data));
+			} catch (error) {
+				console.warn("Could not load payment statuses", error);
+			}
+		}
+
+		function savePaymentStatuses() {
+			const data = Object.fromEntries(paymentStatusMap.entries());
+			localStorage.setItem(PAYMENT_STATUS_KEY, JSON.stringify(data));
+		}
+
+		function escapeHtml(value) {
+			return String(value ?? "")
+				.replace(/&/g, "&amp;")
+				.replace(/</g, "&lt;")
+				.replace(/>/g, "&gt;")
+				.replace(/"/g, "&quot;")
+				.replace(/'/g, "&#039;");
+		}
+
+		function getPaymentStatus(paymentId) {
+			const status = paymentStatusMap.get(String(paymentId));
+
+			if (!status) {
+				return `<span class="payment-status unknown">Not submitted</span>`;
+			}
+
+			const message = status.headerError || status.statusDesc || status.message || "";
+			const titleParts = [];
+
+			if (status.statusCode) {
+				titleParts.push(`Code: ${status.statusCode}`);
+			}
+
+			if (status.utr) {
+				titleParts.push(`UTR: ${status.utr}`);
+			}
+
+			if (status.ibLRefNo) {
+				titleParts.push(`IBL Ref: ${status.ibLRefNo}`);
+			}
+
+			if (message) {
+				titleParts.push(message);
+			}
+
+			const title = escapeHtml(titleParts.join(" | "));
+
+			if (status.state === "success") {
+				return `<span class="payment-status success" title="${title}">✓ ${escapeHtml(status.label || message || "Success")}</span>`;
+			}
+
+			if (status.state === "failed") {
+				return `<span class="payment-status failed" title="${title}">✕ ${escapeHtml(status.label || message || "Failed")}</span>`;
+			}
+
+			return `<span class="payment-status pending" title="${title}">● ${escapeHtml(status.label || message || "Processing")}</span>`;
+		}
+
+		function setPaymentStatus(paymentId, state, label, message = "", extra = {}) {
+			paymentStatusMap.set(String(paymentId), {
+				state,
+				label,
+				message,
+				...extra,
+				updatedAt: new Date().toISOString()
+			});
+			savePaymentStatuses();
+		}
+
+		function parseEscapedJson(value) {
+			if (value === null || value === undefined) return null;
+
+			let parsed = value;
+
+			for (let i = 0; i < 3; i++) {
+				if (typeof parsed !== "string") break;
+
+				try {
+					parsed = JSON.parse(parsed);
+				} catch (_) {
+					break;
+				}
+			}
+
+			return parsed && typeof parsed === "object"
+				? parsed
+				: null;
+		}
+
+		function parseCatalystBankResponse(response) {
+			let root = response;
+
+			if (typeof root === "string") {
+				root = parseEscapedJson(root) || {};
+			}
+
+			if (root?.jsonEscapes) {
+				root = parseEscapedJson(root.jsonEscapes) || root;
+			}
+
+			if (root?.responseData && typeof root.responseData === "string") {
+				const parsed = parseEscapedJson(root.responseData);
+				if (parsed) root = parsed;
+			}
+
+			if (root?.data && typeof root.data === "string") {
+				const parsed = parseEscapedJson(root.data);
+				if (parsed) root = parsed;
+			}
+
+			// Some Catalyst wrappers can return the actual PayResp directly.
+			if (root?.PayResp) {
+				return root;
+			}
+
+			// Also support a wrapper such as { data: { PayResp: ... } }.
+			if (root?.data?.PayResp) {
+				return root.data;
+			}
+
+			return root || {};
+		}
+
+		function getPayResp(response) {
+			const root = parseCatalystBankResponse(response);
+			return root?.PayResp || root?.data?.PayResp || null;
+		}
+
+		function getBankTransaction(response) {
+			const payResp = getPayResp(response);
+			const transactions = Array.isArray(payResp?.Transaction)
+				? payResp.Transaction
+				: [];
+
+			return {
+				payResp,
+				header: payResp?.Header || {},
+				transaction: transactions[0] || null,
+				transactions
+			};
+		}
+
+		function applyCatalystSubmissionStatus(paymentIds, catalystResponse, payload) {
+            const root = parseCatalystBankResponse(catalystResponse);
+            const payResp = root?.PayResp || root?.data?.PayResp || null;
+            const header = payResp?.Header || root?.Header || {};
+            const transactions = Array.isArray(payResp?.Transaction) ? payResp.Transaction : [];
+
+            const headerError = String(header.Error || header.error || "").trim();
+            const directCode = String(root?.StatusCode || root?.statusCode || "").trim().toUpperCase();
+            const directDesc = String(root?.StatusDesc || root?.statusDesc || "").trim();
+            const batchRefNo = root?.BatchRefNo || root?.batchRefNo || header.BatchRefNo || "";
+
+            const batchReceived =
+                directCode === "R000" ||
+                /batch\s*received/i.test(directDesc) ||
+                transactions.some(t => /batch\s*received/i.test(String(t.StatusDesc || "")));
+
+            const payments = payload?.multiPayReq?.body?.payment || [];
+
+            paymentIds.forEach((paymentId, index) => {
+                const payment = payments[index] || {};
+                const tx = transactions[index] || {};
+                const existing = paymentStatusMap.get(String(paymentId)) || {};
+
+                if (headerError) {
+                    setPaymentStatus(paymentId, "failed", "Bank Error", headerError, {
+                        ...existing,
+                        submittedToBank: false,
+                        batchReceived: false,
+                        headerError,
+                        statusCode: directCode,
+                        batchRefNo,
+                        batchId: payload?.multiPayReq?.header?.BatchId || ""
+                    });
+                    return;
+                }
+
+                const statusCode = String(tx.StatusCode || directCode || "").trim().toUpperCase();
+                const statusDesc = String(
+                    tx.StatusDesc || directDesc ||
+                    (batchReceived ? "Batch Received" : "Processing")
+                ).trim();
+
+                setPaymentStatus(
+                    paymentId,
+                    "pending",
+                    batchReceived ? "Batch Received" : "Processing",
+                    statusDesc,
+                    {
+                        ...existing,
+                        submittedToBank: true,
+                        batchReceived,
+                        batchRefNo,
+                        statusCode,
+                        statusDesc,
+                        custRefNo: tx.CustRefNo || payment.custRefNo || existing.custRefNo || "",
+                        ibLRefNo: tx.IBLRefNo || existing.ibLRefNo || "",
+                        batchId: payload?.multiPayReq?.header?.BatchId || "",
+                        submittedAt: existing.submittedAt || new Date().toISOString(),
+                        lastSubmissionResponse: catalystResponse
+                    }
+                );
+            });
+
+            savePaymentStatuses();
+            updateStatusScheduler();
+
+            return {
+                statusCode: directCode || transactions[0]?.StatusCode || "",
+                statusDesc: directDesc || transactions[0]?.StatusDesc ||
+                    (batchReceived ? "Batch Received" : "Processing"),
+                batchRefNo,
+                batchReceived,
+                error: headerError
+            };
+        }
+
+		function getPaymentReference(paymentId) {
+			const payment = allDraftPayments.find(
+				p => String(p.payment_id) === String(paymentId)
+			);
+
+			if (!payment) return "";
+
+			const saved = paymentStatusMap.get(String(paymentId));
+
+			return String(
+				saved?.custRefNo ||
+				payment.reference_number ||
+				payment.payment_number ||
+				""
+			);
+		}
+
+		function normalizeEnquiryResponse(response) {
+			let result = response;
+
+			// First normalize Catalyst's outer response.
+			if (typeof result === "string") {
+				result = parseEscapedJson(result) || { rawResponse: result };
+			}
+
+			// Catalyst may put the bank response inside jsonEscapes.
+			if (result?.jsonEscapes) {
+				const parsed = parseEscapedJson(result.jsonEscapes);
+				if (parsed) result = parsed;
+			}
+
+			// Support responseData/data wrappers too.
+			if (result?.responseData && typeof result.responseData === "string") {
+				const parsed = parseEscapedJson(result.responseData);
+				if (parsed) result = parsed;
+			}
+
+			if (result?.data && typeof result.data === "string") {
+				const parsed = parseEscapedJson(result.data);
+				if (parsed) result = parsed;
+			}
+
+			return result || {};
+		}
+
+		function getEnquiryStatus(result) {
+			const bank = getBankTransaction(result);
+			const header = bank.header || {};
+			const transaction = bank.transaction || null;
+
+			const headerError = String(
+				header.Error ||
+				header.error ||
+				""
+			).trim();
+
+			/*
+			 * CASE 1:
+			 * Header.Error is populated.
+			 *
+			 * Example:
+			 * TxnCount = 0
+			 * Error = "Customer/IBL Transaction Reference Number Not Found"
+			 *
+			 * This is a failed/error enquiry and must be displayed from
+			 * Header.Error, not Transaction[].StatusDesc.
+			 */
+			if (headerError) {
+				return {
+					state: "failed",
+					label: "Error",
+					message: headerError,
+					headerError,
+					header,
+					transaction,
+					refNo: header.RefNo || "",
+					ibLRefNo: "",
+					custRefNo: header.RefNo || "",
+					utr: "",
+					paymentDate: "",
+					beneficiaryName: ""
+				};
+			}
+
+			/*
+			 * CASE 2:
+			 * Bank returned transaction data.
+			 *
+			 * Always use Transaction[].StatusDesc as the displayed
+			 * payment status/message.
+			 */
+			if (transaction) {
+				const statusCode = String(
+					transaction.StatusCode ||
+					transaction.statusCode ||
+					""
+				).trim();
+
+				const statusDesc = String(
+					transaction.StatusDesc ||
+					transaction.statusDesc ||
+					""
+				).trim();
+
+				const text = statusDesc.toLowerCase();
+
+				// Do not mark an arbitrary bank code such as "J" as success.
+				// Only an explicit success description is treated as success.
+				if (
+					text.includes("success") ||
+					text.includes("successful") ||
+					text.includes("completed") ||
+					text.includes("paid") ||
+					text.includes("credited") ||
+					text.includes("processed successfully")
+				) {
+					return {
+						state: "success",
+						label: statusDesc || "Success",
+						message: statusDesc || "Payment successful.",
+						statusCode,
+						headerError: "",
+						header,
+						transaction,
+						refNo: header.RefNo || transaction.CustRefNo || "",
+						ibLRefNo: transaction.IBLRefNo || "",
+						custRefNo: transaction.CustRefNo || header.RefNo || "",
+						utr: transaction.UTR || "",
+						paymentDate: transaction.PaymentDate || "",
+						beneficiaryName: transaction.BeneficiaryName || ""
+					};
+				}
+
+				if (
+					text.includes("fail") ||
+					text.includes("failed") ||
+					text.includes("reject") ||
+					text.includes("declin") ||
+					text.includes("returned") ||
+					text.includes("error")
+				) {
+					return {
+						state: "failed",
+						label: statusDesc || "Failed",
+						message: statusDesc || "Payment failed.",
+						statusCode,
+						headerError: "",
+						header,
+						transaction,
+						refNo: header.RefNo || transaction.CustRefNo || "",
+						ibLRefNo: transaction.IBLRefNo || "",
+						custRefNo: transaction.CustRefNo || header.RefNo || "",
+						utr: transaction.UTR || "",
+						paymentDate: transaction.PaymentDate || "",
+						beneficiaryName: transaction.BeneficiaryName || ""
+					};
+				}
+
+				// Any other bank response is kept as processing/pending.
+				return {
+					state: "pending",
+					label: statusDesc || "Processing",
+					message: statusDesc || `Bank status code: ${statusCode || "N/A"}`,
+					statusCode,
+					headerError: "",
+					header,
+					transaction,
+					refNo: header.RefNo || transaction.CustRefNo || "",
+					ibLRefNo: transaction.IBLRefNo || "",
+					custRefNo: transaction.CustRefNo || header.RefNo || "",
+					utr: transaction.UTR || "",
+					paymentDate: transaction.PaymentDate || "",
+					beneficiaryName: transaction.BeneficiaryName || ""
+				};
+			}
+
+			// No error and no transaction record.
+			return {
+				state: "pending",
+				label: "No Status",
+				message: "Bank did not return transaction status.",
+				statusCode: "",
+				headerError: "",
+				header,
+				transaction: null,
+				refNo: header.RefNo || "",
+				ibLRefNo: "",
+				custRefNo: header.RefNo || "",
+				utr: "",
+				paymentDate: "",
+				beneficiaryName: ""
+			};
+		}
+
+		async function fetchPaymentStatus(paymentId) {
+			const refNo = getPaymentReference(paymentId);
+
+			if (!refNo) {
+				throw new Error("Reference number not found for this payment.");
+			}
+
+			const options = {
+				url: "https://project-rainfall-60040525184.development.catalystserverless.in/server/project_rainfall_function/transactionenquiry",
+				method: "POST",
+				header: [
+					{
+						key: "Content-Type",
+						value: "application/json"
+					},
+					{
+						key: "Accept",
+						value: "application/json"
+					}
+				],
+				body: {
+					mode: "raw",
+					raw: JSON.stringify({
+						Customerid: "10055592",
+						RefNo: refNo,
+						IsBatch: "N"
+					})
+				}
+			};
+
+			console.log("Transaction enquiry request:", {
+				paymentId,
+				payload: JSON.parse(options.body.raw)
+			});
+
+			const value = await ZFAPPS.request(options);
+
+			const responseText =
+				typeof value?.data?.body === "string"
+					? value.data.body
+					: JSON.stringify(
+						value?.data?.body ||
+						value?.data ||
+						{}
+					);
+
+			// console.log("Transaction enquiry raw response:", responseText);
+			let responseBody = {};
+
+			try {
+				responseBody = responseText
+					? JSON.parse(responseText)
+					: {};
+			} catch (_) {
+				responseBody = {
+					rawResponse: responseText
+				};
+			}
+
+			console.log("Transaction enquiry response:", responseBody);
+
+			return responseBody;
+		}
+
+		async function fetchAndApplyPaymentStatus(paymentId) {
+            if (!isStatusCheckAllowed(paymentId)) {
+                throw new Error("Status is available only after Pay and Batch Received.");
+            }
+            const existing = paymentStatusMap.get(String(paymentId)) || {};
+
+			setPaymentStatus(
+				paymentId,
+				"pending",
+				"Checking...",
+				"Fetching latest payment status.",
+				existing
+			);
+			renderPage();
+
+			try {
+				const response = await fetchPaymentStatus(paymentId);
+				const result = normalizeEnquiryResponse(response);
+				const status = getEnquiryStatus(result);
+
+				/*
+				 * Store the complete bank response information so the UI
+				 * can show StatusDesc / Header.Error and UTR details later.
+				 */
+				setPaymentStatus(
+					paymentId,
+					status.state,
+					status.label,
+					status.message,
+					{
+						...existing,
+
+						// Bank header
+						refNo: status.refNo || existing.refNo || "",
+						headerError: status.headerError || "",
+						txnCount: status.header?.TxnCount || "",
+
+						// Bank transaction
+						statusCode: status.statusCode || "",
+						statusDesc: status.message || "",
+						ibLRefNo: status.ibLRefNo || "",
+						custRefNo: status.custRefNo || existing.custRefNo || "",
+						utr: status.utr || "",
+						paymentDate: status.paymentDate || "",
+						beneficiaryName: status.beneficiaryName || "",
+
+						lastEnquiryResponse: result
+					}
+				);
+
+				renderPage();
+
+				showToast(
+					status.headerError
+						? `Error: ${status.headerError}`
+						: `${status.label}: ${status.message}`,
+					status.state === "success"
+						? "success"
+						: status.state === "failed"
+							? "danger"
+							: "warning"
+				);
+
+				return result;
+			} catch (error) {
+				setPaymentStatus(
+					paymentId,
+					"failed",
+					"Status Error",
+					error.message || "Unable to fetch payment status.",
+					existing
+				);
+
+				renderPage();
+				throw error;
+			}
+		}
+
+		async function fetchSelectedStatuses(paymentIds, options = {}) {
+            const ids = [...new Set(paymentIds.map(String))].filter(isStatusCheckAllowed);
+
+			if (!ids.length) {
+                if (!options.silent) {
+                    showToast("Status is available only after Pay and Batch Received.", "warning");
+                }
+                return;
+            }
+
+            const button = document.getElementById("fetchSelectedStatusBtn");
+			if (button) button.disabled = true;
+
+			try {
+				const results = await Promise.allSettled(
+					ids.map(id => fetchAndApplyPaymentStatus(id))
+				);
+
+				const failed = results.filter(
+					result => result.status === "rejected"
+				).length;
+
+				const successful = results.length - failed;
+
+				showToast(
+					`Status fetched for ${successful} payment(s)` +
+					(failed ? `, ${failed} failed.` : "."),
+					failed ? "warning" : "success"
+				);
+			} finally {
+				updateBulkBar();
+				renderPage();
+			}
+		}
+
+		function refreshPayments() {
+			const button = document.getElementById("refreshBtn");
+			if (button) {
+				button.disabled = true;
+				button.classList.add("spinning");
+			}
+
+			// Clear only the current vendor-bank UI state. Cached vendor data remains.
+			vendorBankState.clear();
+
+			document.getElementById("loading").style.display = "block";
+			document.getElementById("empty").style.display = "none";
+
+			return new Promise(resolve => {
+				fetchDraftPayments(resolve);
+			}).finally(() => {
+				if (button) {
+					button.disabled = false;
+					button.classList.remove("spinning");
+				}
+			});
+		}
+
+		window.onload = function () {
+			loadPaymentStatuses();
+
+			ZFAPPS.extension.init().then((App) => {
+				ZFAPPS.invoke('RESIZE', { width: '100%', height: '100%' });
+
+				ZFAPPS.get('organization').then((res) => {
+					orgId = res.organization.organization_id;
+					fetchDraftPayments();
+				}).catch((err) => {
+					console.error('Failed to get organization', err);
+					showEmpty('Could not load organization details.');
+				});
+			});
+
+			document.getElementById('prevBtn').addEventListener('click', () => {
+				if (currentPage > 1) {
+					currentPage--;
+					renderPage();
+					checkPageVendorBanks();
+				}
+			});
+
+			document.getElementById('nextBtn').addEventListener('click', () => {
+				const totalPages = Math.ceil(allDraftPayments.length / PAGE_SIZE);
+				if (currentPage < totalPages) {
+					currentPage++;
+					renderPage();
+					checkPageVendorBanks();
+				}
+			});
+
+			document.getElementById('selectAllChk').addEventListener('change', (e) => {
+				const pageItems = getPageItems();
+				pageItems.forEach(p => {
+					if (e.target.checked) {
+						selectedIds.add(p.payment_id);
+					} else {
+						selectedIds.delete(p.payment_id);
+					}
+				});
+				renderPage();
+			});
+
+			document.getElementById('paySelectedBtn').addEventListener('click', () => {
+				payPayments(Array.from(selectedIds));
+			});
+
+			document.getElementById('fetchSelectedStatusBtn').addEventListener('click', () => {
+				fetchSelectedStatuses(Array.from(selectedIds).filter(isStatusCheckAllowed));
+			});
+		};
+
+		function fetchDraftPayments(done) {
+			let options = {
+				url: 'https://www.zohoapis.in/books/v3/vendorpayments',
+				method: 'GET',
+				url_query: [
+					{ key: 'organization_id', value: orgId },
+					{ key: 'filter_by', value: 'Status.Draft' }
+				],
+				connection_link_name: 'books'
+			};
+
+			ZFAPPS.request(options).then((response) => {
+				let body = typeof response.data.body === 'string' ? JSON.parse(response.data.body) : response.data.body;
+				let payments = body.vendorpayments || [];
+
+				console.log({ payments });
+
+				allDraftPayments = payments;
+				currentPage = 1;
+				selectedIds.clear();
+
+				document.getElementById('loading').style.display = 'none';
+
+				if (allDraftPayments.length === 0) {
+					showEmpty('No draft payments found.');
+					return;
+				}
+
+				const badge = document.getElementById('countBadge');
+				badge.style.display = 'inline-block';
+				badge.innerText = allDraftPayments.length;
+
+				document.getElementById('empty').style.display = 'none';
+				document.getElementById('bulkBar').style.display = 'flex';
+				document.getElementById('pagination').style.display = 'block';
+				renderPage();
+				checkPageVendorBanks();
+				if (typeof done === "function") done();
+			}).catch((err) => {
+				console.error('Request failed', err);
+				showEmpty('Error loading draft payments.');
+				if (typeof done === "function") done();
+			});
+		}
+
+		function getPageItems() {
+			const startIdx = (currentPage - 1) * PAGE_SIZE;
+			const endIdx = startIdx + PAGE_SIZE;
+			return allDraftPayments.slice(startIdx, endIdx);
+		}
+
+		function renderPage() {
+			const listEl = document.getElementById('draftList');
+			listEl.innerHTML = '';
+
+			const pageItems = getPageItems();
+
+			pageItems.forEach((p) => {
+				const isChecked = selectedIds.has(p.payment_id);
+
+				let li = document.createElement('li');
+				li.className = 'list-group-item';
+				li.innerHTML = `
+					<input class="form-check-input row-chk" type="checkbox" data-id="${p.payment_id}" ${isChecked ? 'checked' : ''}>
+					<div class="pm-info">
+						<div class="pm-number">${p.payment_number || p.reference_number || 'N/A'}</div><sup>${p.payment_mode}</sup>
+						<div class="vendor-bank-row">
+            <span class="pm-vendor">${p.vendor_name || ''}</span>
+            ${getBankStatus(p.payment_id)}
+          </div>
+					</div>
+					<span class="pm-amount">${p.amount_formatted || ('₹' + p.amount)}</span>
+					<div class="status-wrap">${getPaymentStatus(p.payment_id)}</div>
+					<button class="btn btn-sm btn-outline-success row-pay-btn" data-id="${p.payment_id}">Pay</button>
+				`;
+				listEl.appendChild(li);
+			});
+
+			// Wire per-row checkboxes
+			listEl.querySelectorAll('.row-chk').forEach(chk => {
+				chk.addEventListener('change', (e) => {
+					const id = e.target.getAttribute('data-id');
+					if (e.target.checked) {
+						selectedIds.add(id);
+					} else {
+						selectedIds.delete(id);
+					}
+					updateBulkBar();
+				});
+			});
+
+			// Wire per-row Pay buttons
+			listEl.querySelectorAll('.row-pay-btn').forEach(btn => {
+				btn.addEventListener('click', (e) => {
+					const id = e.target.getAttribute('data-id');
+					payPayments([id]);
+				});
+			});
+
+			const totalPages = Math.ceil(allDraftPayments.length / PAGE_SIZE);
+			document.getElementById('pageInfo').innerText = `Page ${currentPage} of ${totalPages}`;
+			document.getElementById('prevItem').classList.toggle('disabled', currentPage === 1);
+			document.getElementById('nextItem').classList.toggle('disabled', currentPage === totalPages);
+
+			// Reflect "select all on page" checkbox state
+			const allOnPageSelected = pageItems.length > 0 && pageItems.every(p => selectedIds.has(p.payment_id));
+			document.getElementById('selectAllChk').checked = allOnPageSelected;
+
+			updateBulkBar();
+		}
+
+		function updateBulkBar() {
+			const count = selectedIds.size;
+
+			document.getElementById("selectedCount").innerText = count;
+
+			const statusCount = document.getElementById("selectedStatusCount");
+			if (statusCount) {
+				statusCount.innerText = count;
+			}
+
+			document.getElementById("paySelectedBtn").disabled =
+				count === 0;
+
+			const statusButton =
+				document.getElementById("fetchSelectedStatusBtn");
+
+			if (statusButton) {
+				statusButton.disabled = eligibleStatusCount === 0;
+			}
+		}
+
+		const CATALYST_PAYMENT_API =
+			"https://project-rainfall-60040525184.development.catalystserverless.in/server/project_rainfall_function/transactionposting";
+
+		
+        function normalizePaymentMode(payment) {
+            return String(
+                payment?.payment_mode ||
+                payment?.paymentMode ||
+                payment?.tranType ||
+                payment?.transaction_type || ""
+            ).trim().toUpperCase();
+        }
+
+        function validatePaymentRules(payments) {
+            const errors = [];
+
+            payments.forEach(payment => {
+                const amount = Number(payment?.amount);
+                const mode = normalizePaymentMode(payment);
+                const name = payment?.payment_number ||
+                    payment?.reference_number ||
+                    payment?.vendor_name ||
+                    payment?.payment_id;
+
+                if (!Number.isFinite(amount) || amount <= 0) {
+                    errors.push(`${name}: invalid payment amount.`);
+                    return;
+                }
+
+                // Bank payment flow requested: mode must be RTGS.
+                if (mode !== "RTGS") {
+                    errors.push(
+                        `${name}: payment mode "${mode || "blank"}" is not RTGS. Only RTGS is allowed.`
+                    );
+                }
+
+                // Explicit threshold validation.
+                if (amount >= 200000 && mode !== "RTGS") {
+                    errors.push(
+                        `${name}: amount ₹${amount.toLocaleString("en-IN")} is ₹2,00,000 or above, so payment mode must be RTGS.`
+                    );
+                }
+            });
+
+            if (errors.length) {
+                throw new Error(errors.join(" | "));
+            }
+        }
+
+        function isStatusCheckAllowed(paymentId) {
+            const st = paymentStatusMap.get(String(paymentId));
+            return Boolean(
+                st?.submittedToBank &&
+                st?.batchReceived &&
+                !["success", "failed"].includes(st?.state)
+            );
+        }
+
+        async function runScheduledStatusUpdate() {
+            if (statusSchedulerRunning) return;
+
+            const ids = allDraftPayments
+                .map(p => String(p.payment_id))
+                .filter(isStatusCheckAllowed);
+
+            if (!ids.length) {
+                updateStatusScheduler();
+                return;
+            }
+
+            statusSchedulerRunning = true;
+            try {
+                await fetchSelectedStatuses(ids, { silent: true, scheduled: true });
+            } catch (error) {
+                console.warn("Automatic status update failed:", error);
+            } finally {
+                statusSchedulerRunning = false;
+                updateStatusScheduler();
+            }
+        }
+
+        function updateStatusScheduler() {
+            const active = allDraftPayments.some(p => isStatusCheckAllowed(p.payment_id));
+            const badge = document.getElementById("schedulerBadge");
+
+            if (active && !statusSchedulerTimer) {
+                statusSchedulerTimer = setInterval(
+                    runScheduledStatusUpdate,
+                    STATUS_CHECK_INTERVAL_MS
+                );
+            } else if (!active && statusSchedulerTimer) {
+                clearInterval(statusSchedulerTimer);
+                statusSchedulerTimer = null;
+            }
+
+            if (badge) {
+                badge.className = active
+                    ? "badge rounded-pill text-bg-success"
+                    : "badge rounded-pill text-bg-secondary";
+                badge.innerText = active
+                    ? "Auto status: every 5 min"
+                    : "Auto status: waiting";
+            }
+        }
+
+function buildBankPayment(payment) {
+			const bankAccount = payment.vendorBankAccount || {};
+
+			return {
+				tranType: payment.tranType || payment.transaction_type || payment.payment_mode || "NEFT",
+				custRefNo: payment.reference_number || payment.payment_number || "",
+				amount: Number(payment.amount || 0),
+				debitAcctNo: document.getElementById("bank").value || "",
+				valueDate: payment.value_date || "",
+				benCode: payment.benCode || bankAccount.account_id || "",
+				benName: payment.benName || bankAccount.beneficiary_name || payment.vendor_name || "",
+				benIFSC: payment.benIFSC || bankAccount.routing_number || "",
+				benAcctNo: payment.benAcctNo || bankAccount.account_number || "",
+				benEmail: payment.benEmail || payment.vendorDetails?.email || "",
+				benMobile: payment.benMobile || payment.vendorDetails?.mobile || "",
+				reserve1: payment.reserve1 || "",
+				reserve2: payment.reserve2 || "",
+				reserve3: payment.reserve3 || ""
+			};
+		}
+
+		function generateUniqueBatchId() {
+			const timestamp = new Date()
+				.toISOString()
+				.replace(/\D/g, "");
+
+			const random = Math.random()
+				.toString(36)
+				.substring(2, 8)
+				.toUpperCase();
+
+			return `DJ35BATCH${timestamp}${random}`;
+		}
+
+		async function buildMultiPayPayload(paymentIds) {
+			const ids = paymentIds.map(String);
+			const selectedPayments = allDraftPayments.filter(p => ids.includes(String(p.payment_id)));
+
+			if (!selectedPayments.length) throw new Error("No payment selected.");
+
+			const makerId = document.getElementById("maker").value;
+			const checkerId = document.getElementById("authorizer").value;
+			const debitAcctNumber = document.getElementById("bank").value;
+
+			if (!makerId) throw new Error("Please select Maker.");
+			if (!checkerId) throw new Error("Please select Authorizer.");
+			if (!debitAcctNumber) throw new Error("Please select Bank account.");
+
+			const enrichedPayments = await Promise.all(
+				selectedPayments.map(payment => enrichPaymentWithVendorBank(payment))
+			);
+
+			validatePaymentRules(enrichedPayments);
+
+
+			/*
+			 * FINAL BANK VALIDATION
+			 * This check runs again at submit time, even if the green "i"
+			 * was previously displayed.
+			 */
+			const invalidPayments = enrichedPayments.filter(payment => {
+				const account = payment.vendorBankAccount || {};
+				return !account.account_number ||
+					!account.routing_number ||
+					!account.beneficiary_name;
+			});
+
+			if (invalidPayments.length > 0) {
+				const names = invalidPayments.map(payment =>
+					payment.vendor_name ||
+					payment.vendor_id ||
+					payment.payment_number ||
+					payment.payment_id
+				);
+
+				throw new Error(
+					`Bank account not exists or incomplete for: ${names.join(", ")}`
+				);
+			}
+
+			const payments = enrichedPayments.map(buildBankPayment);
+
+			const invalid = payments.find(p => !p.benName || !p.benIFSC || !p.benAcctNo);
+			if (invalid) {
+				throw new Error("Beneficiary bank details are incomplete. Please check vendor bank account and IFSC.");
+			}
+
+			const batchAmount = payments.reduce((total, p) => total + Number(p.amount || 0), 0);
+
+			return {
+				multiPayReq: {
+					header: {
+						BatchId: generateUniqueBatchId(),
+						batchCount: String(payments.length),
+						batchAmount: String(batchAmount),
+						makerId,
+						checkerId,
+						payMode: "",
+						custId: "10055592",
+						debitAcctNumber
+					},
+					body: { payment: payments }
+				}
+			};
+		}
+
+		async function submitPaymentsToCatalyst(paymentIds) {
+			const payload = await buildMultiPayPayload(paymentIds);
+
+			console.log(
+				"Sending payment payload to Catalyst:",
+				JSON.stringify(payload, null, 2)
+			);
+
+			const options = {
+				url: CATALYST_PAYMENT_API,
+				method: "POST",
+				header: [
+					{
+						key: "Content-Type",
+						value: "application/json"
+					},
+					{
+						key: "Accept",
+						value: "application/json"
+					}
+				],
+				body: {
+					mode: "raw",
+					raw: JSON.stringify(payload)
+				}
+			};
+
+
+			console.log("Catalyst request options:", options);
+
+			const value = await ZFAPPS.request(options);
+			const responseText =
+				typeof value?.data?.body === "string"
+					? value.data.body
+					: JSON.stringify(value?.data?.body || value?.data || {});
+
+
+			let responseBody = {};
+
+			try {
+				responseBody = responseText
+					? JSON.parse(responseText)
+					: {};
+			} catch (error) {
+				responseBody = {
+					rawResponse: responseText
+				};
+			}
+
+			console.log(
+				"Catalyst API response:",
+				responseBody
+			);
+
+			return {
+				response: responseBody,
+				payload
+			};
+		}
+
+		async function payPayments(paymentIds) {
+			if (!paymentIds || paymentIds.length === 0) {
+				return;
+			}
+
+			const payButtons = document.querySelectorAll(
+				".row-pay-btn, #paySelectedBtn, .row-status-btn, #fetchSelectedStatusBtn"
+			);
+
+			payButtons.forEach(button => {
+				button.disabled = true;
+			});
+
+			try {
+				const submission = await submitPaymentsToCatalyst(paymentIds);
+
+				const catalystResponse = submission.response;
+				const payload = submission.payload;
+
+				console.log("Catalyst API response:", catalystResponse);
+
+				/*
+				 * IMPORTANT:
+				 *
+				 * Catalyst:
+				 *   status = success
+				 *
+				 * Bank:
+				 *   StatusCode = R000
+				 *   StatusDesc = Batch Received
+				 *
+				 * Therefore this is NOT final payment success.
+				 */
+				const bankStatus = applyCatalystSubmissionStatus(
+					paymentIds,
+					catalystResponse,
+					payload
+				);
+
+				renderPage();
+
+				showToast(
+					`${paymentIds.length} payment(s) submitted. ` +
+					`${bankStatus.statusDesc}` +
+					(bankStatus.batchRefNo
+						? ` (${bankStatus.batchRefNo})`
+						: ""),
+					"success"
+				);
+
+				/*
+				 * Keep the existing Zoho Books submit flow.
+				 * This changes the Zoho payment state after the bank
+				 * request has been accepted by Catalyst.
+				 *
+				 * It does NOT mean the bank transaction is finally successful.
+				 */
+				const zohoResults = await Promise.allSettled(
+					paymentIds.map(paymentId =>
+						submitPayment(paymentId)
+					)
+				);
+
+				const failedZohoUpdates = zohoResults.filter(
+					result => result.status === "rejected"
+				).length;
+
+				if (failedZohoUpdates > 0) {
+					showToast(
+						`${failedZohoUpdates} payment(s) submitted to bank, ` +
+						`but Zoho update failed.`,
+						"danger"
+					);
+				}
+
+				fetchDraftPayments();
+
+			} catch (error) {
+				console.error(
+					"Payment submission failed:",
+					error
+				);
+
+				paymentIds.forEach(id => {
+					setPaymentStatus(
+						id,
+						"failed",
+						"Submission Failed",
+						error.message || "Payment submission failed."
+					);
+				});
+
+				renderPage();
+
+				showToast(
+					error.message || "Payment submission failed.",
+					"danger"
+				);
+			} finally {
+				payButtons.forEach(button => {
+					button.disabled = false;
+				});
+
+				updateBulkBar();
+			}
+		}
+
+		function submitPayment(paymentId) {
+			const options = {
+				url:
+					`https://www.zohoapis.in/books/v3/vendorpayments/${paymentId}/submit`,
+
+				method: "POST",
+
+				url_query: [
+					{
+						key: "organization_id",
+						value: orgId
+					}
+				],
+
+				connection_link_name: "books"
+			};
+
+			return ZFAPPS.request(options).then(response => {
+				const body =
+					typeof response.data.body === "string"
+						? JSON.parse(response.data.body)
+						: response.data.body;
+
+				if (body.code !== 0) {
+					console.error(
+						`Zoho submit failed for ${paymentId}:`,
+						body.message
+					);
+
+					throw new Error(body.message);
+				}
+
+				return body;
+			});
+		}
+
+		function showEmpty(msg) {
+			document.getElementById('loading').style.display = 'none';
+			document.getElementById('pagination').style.display = 'none';
+			document.getElementById('bulkBar').style.display = 'none';
+			let emptyEl = document.getElementById('empty');
+			emptyEl.style.display = 'block';
+			emptyEl.innerText = msg;
+		}
+
+		function showToast(message, variant) {
+			const toastBox = document.getElementById('toastBox');
+			toastBox.className = `toast align-items-center text-white border-0 bg-${variant}`;
+			document.getElementById('toastMsg').innerText = message;
+			const toast = new bootstrap.Toast(toastBox, { delay: 3500 });
+			toast.show();
+		}
+
+	</script>
+
+	<script>
+		// UI-only filter settings: persists the selected UI values without changing
+		// the existing Zoho Books payment API flow.
+		const FILTER_KEY = 'bankFilterSettings';
+
+		function loadFilterSettings() {
+			try {
+				const saved = localStorage.getItem(FILTER_KEY);
+				if (!saved) return;
+				const data = JSON.parse(saved);
+				document.getElementById('maker').value = data.maker || '';
+				document.getElementById('authorizer').value = data.authorizer || '';
+				document.getElementById('bank').value = data.bank || '';
+			} catch (e) {
+				console.warn('Could not load filter settings', e);
+			}
+		}
+
+		document.getElementById('saveFilterBtn').addEventListener('click', () => {
+			const filterData = {
+				maker: document.getElementById('maker').value,
+				authorizer: document.getElementById('authorizer').value,
+				bank: document.getElementById('bank').value
+			};
+			localStorage.setItem(FILTER_KEY, JSON.stringify(filterData));
+			document.getElementById('filterToastMsg').innerText = 'Filter settings saved successfully.';
+			bootstrap.Toast.getOrCreateInstance(document.getElementById('filterToast')).show();
+		});
+
+		document.getElementById('resetFilterBtn').addEventListener('click', () => {
+			document.getElementById('maker').value = '';
+			document.getElementById('authorizer').value = '';
+			document.getElementById('bank').value = '';
+			localStorage.removeItem(FILTER_KEY);
+			document.getElementById('filterToastMsg').innerText = 'Filter settings reset.';
+			bootstrap.Toast.getOrCreateInstance(document.getElementById('filterToast')).show();
+		});
+
+		loadFilterSettings();
+
+		// Update the payment row markup to match the IndusInd UI without changing
+		// payment selection/submission logic.
+		const originalRenderPage = renderPage;
+		renderPage = function () {
+			const listEl = document.getElementById('draftList');
+			listEl.innerHTML = '';
+
+			const pageItems = getPageItems();
+
+			pageItems.forEach((p) => {
+				const isChecked = selectedIds.has(String(p.payment_id));
+
+				const li = document.createElement('li');
+				li.className = 'list-group-item';
+
+				li.innerHTML = `
+					<input class="form-check-input row-chk"
+						type="checkbox"
+						data-id="${escapeHtml(p.payment_id)}"
+						${isChecked ? 'checked' : ''}>
+
+					<div class="pm-info">
+						<div class="pm-number">
+							${escapeHtml(p.payment_number || p.reference_number || 'N/A')}
+							<span class="pm-mode">
+								${escapeHtml(p.payment_mode || '')}
+							</span>
+						</div>
+
+						<div class="vendor-bank-row">
+							<span class="pm-vendor">
+								${escapeHtml(p.vendor_name || '')}
+							</span>
+							${getBankStatus(p.payment_id)}
+						</div>
+					</div>
+
+					<span class="pm-amount">
+						${escapeHtml(
+					p.amount_formatted ||
+					('₹' + p.amount)
+				)}
+					</span>
+
+					<div class="status-wrap">
+						<div class="d-flex flex-column align-items-end gap-1">
+							${getPaymentStatus(p.payment_id)}
+							${(() => {
+						const st = paymentStatusMap.get(String(p.payment_id));
+						if (!st) return "";
+						const text = st.headerError || st.statusDesc || st.message || "";
+						return text
+							? `<small class="text-muted text-end" style="max-width:240px;">${escapeHtml(text)}</small>`
+							: "";
+					})()}
+						</div>
+					</div>
+
+					<div class="status-actions">
+						<button
+							type="button"
+							class="btn btn-sm btn-outline-secondary row-status-btn"
+							data-status-id="${escapeHtml(p.payment_id)}"
+                            ${isStatusCheckAllowed(p.payment_id) ? "" : "disabled"}
+                            title="${isStatusCheckAllowed(p.payment_id) ? "Fetch latest bank status" : "Available only after Pay and Batch Received"}">
+							↻ Status
+						</button>
+
+						<button
+							type="button"
+							class="btn btn-sm btn-outline-success row-pay-btn"
+							data-id="${escapeHtml(p.payment_id)}">
+							Pay
+						</button>
+					</div>
+				`;
+
+				listEl.appendChild(li);
+			});
+
+			listEl.querySelectorAll('.row-chk').forEach(chk => {
+				chk.addEventListener('change', (e) => {
+					const id = String(
+						e.target.getAttribute('data-id')
+					);
+
+					if (e.target.checked) {
+						selectedIds.add(id);
+					} else {
+						selectedIds.delete(id);
+					}
+
+					updateBulkBar();
+				});
+			});
+
+			listEl.querySelectorAll('.row-pay-btn').forEach(btn => {
+				btn.addEventListener('click', (e) => {
+					const id = String(
+						e.currentTarget.getAttribute('data-id')
+					);                    const payment = allDraftPayments.find(p => String(p.payment_id) === id);
+                    if (!payment) {
+                        showToast("Payment not found.", "danger");
+                        return;
+                    }
+
+                    try {
+                        validatePaymentRules([payment]);
+                    } catch (validationError) {
+                        showToast(validationError.message, "danger");
+                        return;
+                    }
+
+                    const state = vendorBankState.get(id);
+
+                    if (state && !state.exists) {
+						showToast(
+							state.error ||
+							"Vendor bank account not exists.",
+							"danger"
+						);
+						return;
+					}
+
+					payPayments([id]);
+				});
+			});
+
+			listEl.querySelectorAll('.row-status-btn').forEach(btn => {
+				btn.addEventListener('click', async (e) => {
+					const button = e.currentTarget;
+					const id = String(
+						button.getAttribute('data-status-id')
+					);
+
+					button.disabled = true;
+					const oldText = button.innerHTML;
+					button.innerHTML = "Checking...";
+
+					try {
+						await fetchAndApplyPaymentStatus(id);
+					} catch (error) {
+						showToast(
+							error.message ||
+							"Could not fetch payment status.",
+							"danger"
+						);
+					} finally {
+						button.disabled = false;
+						button.innerHTML = oldText;
+					}
+				});
+			});
+
+			listEl.querySelectorAll('.bank-info-btn').forEach(btn => {
+				btn.addEventListener('click', (e) => {
+					const paymentId =
+						e.currentTarget.getAttribute(
+							'data-payment-id'
+						);
+
+					const state =
+						vendorBankState.get(String(paymentId));
+
+					if (!state || !state.exists) return;
+
+					const vendor = state.vendor || {};
+					const account = state.account || {};
+
+					document.getElementById(
+						'bankDetailsBody'
+					).innerHTML = `
+						<div class="small">
+							<div class="mb-2">
+								<strong>Vendor:</strong>
+								${escapeHtml(vendor.contact_name || '')}
+							</div>
+							<div class="mb-2">
+								<strong>Bank:</strong>
+								${escapeHtml(account.bank_name || '')}
+							</div>
+							<div class="mb-2">
+								<strong>Beneficiary:</strong>
+								${escapeHtml(account.beneficiary_name || '')}
+							</div>
+							<div class="mb-2">
+								<strong>Account No:</strong>
+								${escapeHtml(account.account_number || '')}
+							</div>
+							<div>
+								<strong>IFSC:</strong>
+								${escapeHtml(account.routing_number || '')}
+							</div>
+						</div>
+					`;
+
+					bootstrap.Modal.getOrCreateInstance(
+						document.getElementById(
+							'bankDetailsModal'
+						)
+					).show();
+				});
+			});
+
+			const totalPages =
+				Math.ceil(
+					allDraftPayments.length /
+					PAGE_SIZE
+				);
+
+			document.getElementById(
+				'pageInfo'
+			).innerText =
+				`Page ${currentPage} of ${totalPages}`;
+
+			document.getElementById(
+				'prevItem'
+			).classList.toggle(
+				'disabled',
+				currentPage === 1
+			);
+
+			document.getElementById(
+				'nextItem'
+			).classList.toggle(
+				'disabled',
+				currentPage === totalPages
+			);
+
+			const allOnPageSelected =
+				pageItems.length > 0 &&
+				pageItems.every(p =>
+					selectedIds.has(
+						String(p.payment_id)
+					)
+				);
+
+			document.getElementById(
+				'selectAllChk'
+			).checked = allOnPageSelected;
+
+			updateBulkBar();
+		};
+	</script>
+
+	<div class="modal fade" id="bankDetailsModal" tabindex="-1" aria-hidden="true">
+		<div class="modal-dialog modal-dialog-centered">
+			<div class="modal-content">
+				<div class="modal-header" style="background:#842220;color:#fff;border-bottom:3px solid #c69214;">
+					<h6 class="modal-title">Vendor Bank Details</h6>
+					<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+				</div>
+				<div class="modal-body" id="bankDetailsBody"></div>
+			</div>
+		</div>
+	</div>
+
+</body>
+
+</html>
