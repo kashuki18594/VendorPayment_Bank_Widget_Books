@@ -469,9 +469,9 @@
 					<span class="small text-muted">Payment Status</span>
 				</div>
 				<div class="d-flex align-items-center gap-2">
-                    <span id="schedulerBadge" class="badge rounded-pill text-bg-secondary">Auto status: waiting</span>
-                    <span id="countBadge" class="badge rounded-pill" style="display:none;"></span>
-                </div>
+					<span id="schedulerBadge" class="badge rounded-pill text-bg-secondary">Auto status: waiting</span>
+					<span id="countBadge" class="badge rounded-pill" style="display:none;"></span>
+				</div>
 			</div>
 
 			<div id="loading">
@@ -545,9 +545,9 @@
 		// Payment status returned by Catalyst, keyed by Zoho payment_id.
 		let paymentStatusMap = new Map();
 		const PAYMENT_STATUS_KEY = "indusindPaymentStatus";
-        const STATUS_CHECK_INTERVAL_MS = 5 * 60 * 1000;
-        let statusSchedulerTimer = null;
-        let statusSchedulerRunning = false;
+		const STATUS_CHECK_INTERVAL_MS = 5 * 60 * 1000;
+		let statusSchedulerTimer = null;
+		let statusSchedulerRunning = false;
 
 		let vendorCache = new Map();
 
@@ -561,7 +561,8 @@
 			}
 
 			if (!state.exists) {
-				return `<span class="bank-status bank-status-error" title="${state.error || "Bank account not exists"}">!</span>`;
+				return `<button type="button" class="bank-status bank-status-error bank-error-info-btn"
+    data-payment-id="${paymentId}" title="${escapeHtml(state.error || "Bank account not exists")}">i</button>`;
 			}
 
 			return `<button type="button" class="bank-status bank-status-ok bank-info-btn"
@@ -813,80 +814,80 @@
 		}
 
 		function applyCatalystSubmissionStatus(paymentIds, catalystResponse, payload) {
-            const root = parseCatalystBankResponse(catalystResponse);
-            const payResp = root?.PayResp || root?.data?.PayResp || null;
-            const header = payResp?.Header || root?.Header || {};
-            const transactions = Array.isArray(payResp?.Transaction) ? payResp.Transaction : [];
+			const root = parseCatalystBankResponse(catalystResponse);
+			const payResp = root?.PayResp || root?.data?.PayResp || null;
+			const header = payResp?.Header || root?.Header || {};
+			const transactions = Array.isArray(payResp?.Transaction) ? payResp.Transaction : [];
 
-            const headerError = String(header.Error || header.error || "").trim();
-            const directCode = String(root?.StatusCode || root?.statusCode || "").trim().toUpperCase();
-            const directDesc = String(root?.StatusDesc || root?.statusDesc || "").trim();
-            const batchRefNo = root?.BatchRefNo || root?.batchRefNo || header.BatchRefNo || "";
+			const headerError = String(header.Error || header.error || "").trim();
+			const directCode = String(root?.StatusCode || root?.statusCode || "").trim().toUpperCase();
+			const directDesc = String(root?.StatusDesc || root?.statusDesc || "").trim();
+			const batchRefNo = root?.BatchRefNo || root?.batchRefNo || header.BatchRefNo || "";
 
-            const batchReceived =
-                directCode === "R000" ||
-                /batch\s*received/i.test(directDesc) ||
-                transactions.some(t => /batch\s*received/i.test(String(t.StatusDesc || "")));
+			const batchReceived =
+				directCode === "R000" ||
+				/batch\s*received/i.test(directDesc) ||
+				transactions.some(t => /batch\s*received/i.test(String(t.StatusDesc || "")));
 
-            const payments = payload?.multiPayReq?.body?.payment || [];
+			const payments = payload?.multiPayReq?.body?.payment || [];
 
-            paymentIds.forEach((paymentId, index) => {
-                const payment = payments[index] || {};
-                const tx = transactions[index] || {};
-                const existing = paymentStatusMap.get(String(paymentId)) || {};
+			paymentIds.forEach((paymentId, index) => {
+				const payment = payments[index] || {};
+				const tx = transactions[index] || {};
+				const existing = paymentStatusMap.get(String(paymentId)) || {};
 
-                if (headerError) {
-                    setPaymentStatus(paymentId, "failed", "Bank Error", headerError, {
-                        ...existing,
-                        submittedToBank: false,
-                        batchReceived: false,
-                        headerError,
-                        statusCode: directCode,
-                        batchRefNo,
-                        batchId: payload?.multiPayReq?.header?.BatchId || ""
-                    });
-                    return;
-                }
+				if (headerError) {
+					setPaymentStatus(paymentId, "failed", "Bank Error", headerError, {
+						...existing,
+						submittedToBank: false,
+						batchReceived: false,
+						headerError,
+						statusCode: directCode,
+						batchRefNo,
+						batchId: payload?.multiPayReq?.header?.BatchId || ""
+					});
+					return;
+				}
 
-                const statusCode = String(tx.StatusCode || directCode || "").trim().toUpperCase();
-                const statusDesc = String(
-                    tx.StatusDesc || directDesc ||
-                    (batchReceived ? "Batch Received" : "Processing")
-                ).trim();
+				const statusCode = String(tx.StatusCode || directCode || "").trim().toUpperCase();
+				const statusDesc = String(
+					tx.StatusDesc || directDesc ||
+					(batchReceived ? "Batch Received" : "Processing")
+				).trim();
 
-                setPaymentStatus(
-                    paymentId,
-                    "pending",
-                    batchReceived ? "Batch Received" : "Processing",
-                    statusDesc,
-                    {
-                        ...existing,
-                        submittedToBank: true,
-                        batchReceived,
-                        batchRefNo,
-                        statusCode,
-                        statusDesc,
-                        custRefNo: tx.CustRefNo || payment.custRefNo || existing.custRefNo || "",
-                        ibLRefNo: tx.IBLRefNo || existing.ibLRefNo || "",
-                        batchId: payload?.multiPayReq?.header?.BatchId || "",
-                        submittedAt: existing.submittedAt || new Date().toISOString(),
-                        lastSubmissionResponse: catalystResponse
-                    }
-                );
-            });
+				setPaymentStatus(
+					paymentId,
+					"pending",
+					batchReceived ? "Batch Received" : "Processing",
+					statusDesc,
+					{
+						...existing,
+						submittedToBank: true,
+						batchReceived,
+						batchRefNo,
+						statusCode,
+						statusDesc,
+						custRefNo: tx.CustRefNo || payment.custRefNo || existing.custRefNo || "",
+						ibLRefNo: tx.IBLRefNo || existing.ibLRefNo || "",
+						batchId: payload?.multiPayReq?.header?.BatchId || "",
+						submittedAt: existing.submittedAt || new Date().toISOString(),
+						lastSubmissionResponse: catalystResponse
+					}
+				);
+			});
 
-            savePaymentStatuses();
-            updateStatusScheduler();
+			savePaymentStatuses();
+			updateStatusScheduler();
 
-            return {
-                statusCode: directCode || transactions[0]?.StatusCode || "",
-                statusDesc: directDesc || transactions[0]?.StatusDesc ||
-                    (batchReceived ? "Batch Received" : "Processing"),
-                batchRefNo,
-                batchReceived,
-                error: headerError
-            };
-        }
+			return {
+				statusCode: directCode || transactions[0]?.StatusCode || "",
+				statusDesc: directDesc || transactions[0]?.StatusDesc ||
+					(batchReceived ? "Batch Received" : "Processing"),
+				batchRefNo,
+				batchReceived,
+				error: headerError
+			};
+		}
 
 		function getPaymentReference(paymentId) {
 			const payment = allDraftPayments.find(
@@ -1147,10 +1148,10 @@
 		}
 
 		async function fetchAndApplyPaymentStatus(paymentId) {
-            if (!isStatusCheckAllowed(paymentId)) {
-                throw new Error("Status is available only after Pay and Batch Received.");
-            }
-            const existing = paymentStatusMap.get(String(paymentId)) || {};
+			if (!isStatusCheckAllowed(paymentId)) {
+				throw new Error("Status is available only after Pay and Batch Received.");
+			}
+			const existing = paymentStatusMap.get(String(paymentId)) || {};
 
 			setPaymentStatus(
 				paymentId,
@@ -1225,16 +1226,16 @@
 		}
 
 		async function fetchSelectedStatuses(paymentIds, options = {}) {
-            const ids = [...new Set(paymentIds.map(String))].filter(isStatusCheckAllowed);
+			const ids = [...new Set(paymentIds.map(String))].filter(isStatusCheckAllowed);
 
 			if (!ids.length) {
-                if (!options.silent) {
-                    showToast("Status is available only after Pay and Batch Received.", "warning");
-                }
-                return;
-            }
+				if (!options.silent) {
+					showToast("Status is available only after Pay and Batch Received.", "warning");
+				}
+				return;
+			}
 
-            const button = document.getElementById("fetchSelectedStatusBtn");
+			const button = document.getElementById("fetchSelectedStatusBtn");
 			if (button) button.disabled = true;
 
 			try {
@@ -1462,6 +1463,14 @@
 			const statusButton =
 				document.getElementById("fetchSelectedStatusBtn");
 
+			const eligibleStatusCount = Array.from(selectedIds)
+				.filter(id => isStatusCheckAllowed(id))
+				.length;
+
+			if (statusCount) {
+				statusCount.innerText = eligibleStatusCount;
+			}
+
 			if (statusButton) {
 				statusButton.disabled = eligibleStatusCount === 0;
 			}
@@ -1470,114 +1479,114 @@
 		const CATALYST_PAYMENT_API =
 			"https://project-rainfall-60040525184.development.catalystserverless.in/server/project_rainfall_function/transactionposting";
 
-		
-        function normalizePaymentMode(payment) {
-            return String(
-                payment?.payment_mode ||
-                payment?.paymentMode ||
-                payment?.tranType ||
-                payment?.transaction_type || ""
-            ).trim().toUpperCase();
-        }
 
-        function validatePaymentRules(payments) {
-            const errors = [];
+		function normalizePaymentMode(payment) {
+			return String(
+				payment?.payment_mode ||
+				payment?.paymentMode ||
+				payment?.tranType ||
+				payment?.transaction_type || ""
+			).trim().toUpperCase();
+		}
 
-            payments.forEach(payment => {
-                const amount = Number(payment?.amount);
-                const mode = normalizePaymentMode(payment);
-                const name = payment?.payment_number ||
-                    payment?.reference_number ||
-                    payment?.vendor_name ||
-                    payment?.payment_id;
+		function validatePaymentRules(payments) {
+			const errors = [];
 
-                if (!Number.isFinite(amount) || amount <= 0) {
-                    errors.push(`${name}: invalid payment amount.`);
-                    return;
-                }
+			payments.forEach(payment => {
+				const amount = Number(payment?.amount);
+				const mode = normalizePaymentMode(payment);
+				const name = payment?.payment_number ||
+					payment?.reference_number ||
+					payment?.vendor_name ||
+					payment?.payment_id;
 
-                // Bank payment flow requested: mode must be RTGS.
-                if (mode !== "RTGS") {
-                    errors.push(
-                        `${name}: payment mode "${mode || "blank"}" is not RTGS. Only RTGS is allowed.`
-                    );
-                }
+				if (!Number.isFinite(amount) || amount <= 0) {
+					errors.push(`${name}: invalid payment amount.`);
+					return;
+				}
 
-                // Explicit threshold validation.
-                if (amount >= 200000 && mode !== "RTGS") {
-                    errors.push(
-                        `${name}: amount ₹${amount.toLocaleString("en-IN")} is ₹2,00,000 or above, so payment mode must be RTGS.`
-                    );
-                }
-            });
+				// Bank payment flow requested: mode must be RTGS.
+				if (mode === "RTGS" && amount < 200000) {
+					errors.push(
+						`${name}: payment mode "${mode}" cannot be used for an amount below ₹2,00,000.`
+					);
+				}
 
-            if (errors.length) {
-                throw new Error(errors.join(" | "));
-            }
-        }
+				// Explicit threshold validation.
+				if (amount >= 200000 && mode !== "RTGS" && mode !== "NEFT") {
+					errors.push(
+						`${name}: amount ₹${amount.toLocaleString("en-IN")} is ₹2,00,000 or above, so payment mode must be RTGS or NEFT.`
+					);
+				}
+			});
 
-        function isStatusCheckAllowed(paymentId) {
-            const st = paymentStatusMap.get(String(paymentId));
-            return Boolean(
-                st?.submittedToBank &&
-                st?.batchReceived &&
-                !["success", "failed"].includes(st?.state)
-            );
-        }
+			if (errors.length) {
+				throw new Error(errors.join(" | "));
+			}
+		}
 
-        async function runScheduledStatusUpdate() {
-            if (statusSchedulerRunning) return;
+		function isStatusCheckAllowed(paymentId) {
+			const st = paymentStatusMap.get(String(paymentId));
+			return Boolean(
+				st?.submittedToBank &&
+				st?.batchReceived &&
+				!["success", "failed"].includes(st?.state)
+			);
+		}
 
-            const ids = allDraftPayments
-                .map(p => String(p.payment_id))
-                .filter(isStatusCheckAllowed);
+		async function runScheduledStatusUpdate() {
+			if (statusSchedulerRunning) return;
 
-            if (!ids.length) {
-                updateStatusScheduler();
-                return;
-            }
+			const ids = allDraftPayments
+				.map(p => String(p.payment_id))
+				.filter(isStatusCheckAllowed);
 
-            statusSchedulerRunning = true;
-            try {
-                await fetchSelectedStatuses(ids, { silent: true, scheduled: true });
-            } catch (error) {
-                console.warn("Automatic status update failed:", error);
-            } finally {
-                statusSchedulerRunning = false;
-                updateStatusScheduler();
-            }
-        }
+			if (!ids.length) {
+				updateStatusScheduler();
+				return;
+			}
 
-        function updateStatusScheduler() {
-            const active = allDraftPayments.some(p => isStatusCheckAllowed(p.payment_id));
-            const badge = document.getElementById("schedulerBadge");
+			statusSchedulerRunning = true;
+			try {
+				await fetchSelectedStatuses(ids, { silent: true, scheduled: true });
+			} catch (error) {
+				console.warn("Automatic status update failed:", error);
+			} finally {
+				statusSchedulerRunning = false;
+				updateStatusScheduler();
+			}
+		}
 
-            if (active && !statusSchedulerTimer) {
-                statusSchedulerTimer = setInterval(
-                    runScheduledStatusUpdate,
-                    STATUS_CHECK_INTERVAL_MS
-                );
-            } else if (!active && statusSchedulerTimer) {
-                clearInterval(statusSchedulerTimer);
-                statusSchedulerTimer = null;
-            }
+		function updateStatusScheduler() {
+			const active = allDraftPayments.some(p => isStatusCheckAllowed(p.payment_id));
+			const badge = document.getElementById("schedulerBadge");
 
-            if (badge) {
-                badge.className = active
-                    ? "badge rounded-pill text-bg-success"
-                    : "badge rounded-pill text-bg-secondary";
-                badge.innerText = active
-                    ? "Auto status: every 5 min"
-                    : "Auto status: waiting";
-            }
-        }
+			if (active && !statusSchedulerTimer) {
+				statusSchedulerTimer = setInterval(
+					runScheduledStatusUpdate,
+					STATUS_CHECK_INTERVAL_MS
+				);
+			} else if (!active && statusSchedulerTimer) {
+				clearInterval(statusSchedulerTimer);
+				statusSchedulerTimer = null;
+			}
 
-function buildBankPayment(payment) {
+			if (badge) {
+				badge.className = active
+					? "badge rounded-pill text-bg-success"
+					: "badge rounded-pill text-bg-secondary";
+				badge.innerText = active
+					? "Auto status: every 5 min"
+					: "Auto status: waiting";
+			}
+		}
+
+		function buildBankPayment(payment) {
 			const bankAccount = payment.vendorBankAccount || {};
 
 			return {
 				tranType: payment.tranType || payment.transaction_type || payment.payment_mode || "NEFT",
-				custRefNo: payment.reference_number || payment.payment_number || "",
+				custRefNo: payment.payment_number || "",
 				amount: Number(payment.amount || 0),
 				debitAcctNo: document.getElementById("bank").value || "",
 				valueDate: payment.value_date || "",
@@ -2003,7 +2012,7 @@ function buildBankPayment(payment) {
 							type="button"
 							class="btn btn-sm btn-outline-secondary row-status-btn"
 							data-status-id="${escapeHtml(p.payment_id)}"
-                            ${isStatusCheckAllowed(p.payment_id) ? "" : "disabled"}
+                           
                             title="${isStatusCheckAllowed(p.payment_id) ? "Fetch latest bank status" : "Available only after Pay and Batch Received"}">
 							↻ Status
 						</button>
@@ -2040,22 +2049,22 @@ function buildBankPayment(payment) {
 				btn.addEventListener('click', (e) => {
 					const id = String(
 						e.currentTarget.getAttribute('data-id')
-					);                    const payment = allDraftPayments.find(p => String(p.payment_id) === id);
-                    if (!payment) {
-                        showToast("Payment not found.", "danger");
-                        return;
-                    }
+					); const payment = allDraftPayments.find(p => String(p.payment_id) === id);
+					if (!payment) {
+						showToast("Payment not found.", "danger");
+						return;
+					}
 
-                    try {
-                        validatePaymentRules([payment]);
-                    } catch (validationError) {
-                        showToast(validationError.message, "danger");
-                        return;
-                    }
+					try {
+						validatePaymentRules([payment]);
+					} catch (validationError) {
+						showToast(validationError.message, "danger");
+						return;
+					}
 
-                    const state = vendorBankState.get(id);
+					const state = vendorBankState.get(id);
 
-                    if (state && !state.exists) {
+					if (state && !state.exists) {
 						showToast(
 							state.error ||
 							"Vendor bank account not exists.",
@@ -2091,6 +2100,18 @@ function buildBankPayment(payment) {
 						button.disabled = false;
 						button.innerHTML = oldText;
 					}
+				});
+			});
+
+			listEl.querySelectorAll('.bank-error-info-btn').forEach(btn => {
+				btn.addEventListener('click', (e) => {
+					const paymentId = e.currentTarget.getAttribute('data-payment-id');
+					const state = vendorBankState.get(String(paymentId));
+
+					showToast(
+						state?.error || "Bank account not exists for this vendor.",
+						"danger"
+					);
 				});
 			});
 
