@@ -220,7 +220,8 @@
 			color: #fff;
 		}
 
-		#pagination {
+		#pagination,
+		#manualPagination {
 			padding: 9px 16px;
 			border-top: 1px solid #eee;
 		}
@@ -403,6 +404,67 @@
 			background: var(--indusind-red);
 			color: #fff;
 		}
+
+		/* --- Tabs + manual payment --- */
+		.nav-tabs {
+			margin-top: 14px;
+			border-bottom: 2px solid var(--card-border);
+		}
+
+		.nav-tabs .nav-link {
+			color: var(--muted);
+			font-weight: 650;
+			font-size: 13px;
+			border: 0;
+			border-bottom: 2px solid transparent;
+			margin-bottom: -2px;
+		}
+
+		.nav-tabs .nav-link.active {
+			color: var(--indusind-red);
+			background: transparent;
+			border-bottom-color: var(--indusind-red);
+		}
+
+		#manualCard {
+			margin-top: 14px;
+		}
+
+		#manualForm .form-control {
+			min-height: 36px;
+			border-color: #d6c9c9;
+			border-radius: 5px;
+			font-size: 13px;
+		}
+
+		#manualForm .form-control:focus {
+			border-color: var(--indusind-red);
+			box-shadow: 0 0 0 .18rem rgba(132, 34, 32, .12);
+		}
+
+		#manualHistory {
+			margin: 0;
+		}
+
+		#manualHistory .list-group-item {
+			border-left: 0;
+			border-right: 0;
+			padding: 11px 16px;
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) auto auto;
+			gap: 12px;
+			align-items: center;
+		}
+
+		#manualHistory .list-group-item:first-child {
+			border-top: 0;
+		}
+
+		@media (max-width: 700px) {
+			#manualHistory .list-group-item {
+				grid-template-columns: minmax(0, 1fr) auto;
+			}
+		}
 	</style>
 </head>
 
@@ -462,6 +524,20 @@
 			</div>
 		</div>
 
+		<ul class="nav nav-tabs" id="mainTabs" role="tablist">
+			<li class="nav-item" role="presentation">
+				<button class="nav-link active" id="booksTabBtn" data-bs-toggle="tab" data-bs-target="#tab-books"
+					type="button" role="tab">Books Draft Payments</button>
+			</li>
+			<li class="nav-item" role="presentation">
+				<button class="nav-link" id="manualTabBtn" data-bs-toggle="tab" data-bs-target="#tab-manual"
+					type="button" role="tab">Manual Payment</button>
+			</li>
+		</ul>
+
+		<div class="tab-content">
+		<div class="tab-pane fade show active" id="tab-books" role="tabpanel">
+
 		<div class="section-card">
 			<div class="section-head">
 				<div class="d-flex align-items-center gap-2">
@@ -509,6 +585,104 @@
 				</ul>
 			</nav>
 		</div>
+
+		</div><!-- /#tab-books -->
+
+		<div class="tab-pane fade" id="tab-manual" role="tabpanel">
+			<div class="bank-card" id="manualCard">
+				<div class="bank-header">
+					<h5>Manual Payment</h5>
+					<span class="bank-badge">INDUSIND BANK</span>
+				</div>
+				<div class="filter-body">
+					<p class="text-muted small mb-3">
+						Enter beneficiary details manually. This submits directly to the bank using the
+						Maker, Authorizer and Bank selected in Settings above. It is <strong>not</strong> recorded in Zoho Books.
+					</p>
+					<form id="manualForm">
+						<div class="row g-3">
+							<div class="col-md-4">
+								<label class="form-label" for="mReference">Reference No</label>
+								<input type="text" class="form-control" id="mReference"
+									placeholder="Auto-generated if blank">
+							</div>
+							<div class="col-md-4">
+								<label class="form-label" for="mMode">Payment Mode <span
+										style="color:var(--indusind-red)">*</span></label>
+								<select class="form-select" id="mMode">
+									<option value="NEFT">NEFT</option>
+									<option value="RTGS">RTGS</option>
+									<option value="IMPS">IMPS</option>
+									<option value="IFTO">IFTO</option>
+								</select>
+							</div>
+							<div class="col-md-4">
+								<label class="form-label" for="mAmount">Amount (&#8377;) <span
+										style="color:var(--indusind-red)">*</span></label>
+								<input type="number" min="1" step="0.01" class="form-control" id="mAmount"
+									placeholder="0.00">
+							</div>
+							<div class="col-md-4">
+								<label class="form-label" for="mValueDate">Value Date <span
+										style="color:var(--indusind-red)">*</span></label>
+								<input type="date" class="form-control" id="mValueDate" required>
+							</div>
+							<div class="col-md-4">
+								<label class="form-label" for="mBenCode">Beneficiary Code</label>
+								<input type="text" class="form-control" id="mBenCode" placeholder="Optional">
+							</div>
+							<div class="col-md-4">
+								<label class="form-label" for="mBenName">Beneficiary Name <span
+										style="color:var(--indusind-red)">*</span></label>
+								<input type="text" class="form-control" id="mBenName">
+							</div>
+							<div class="col-md-4">
+								<label class="form-label" for="mBenIFSC">Beneficiary IFSC <span
+										style="color:var(--indusind-red)">*</span></label>
+								<input type="text" class="form-control text-uppercase" id="mBenIFSC">
+							</div>
+							<div class="col-md-4">
+								<label class="form-label" for="mBenAcct">Beneficiary Account No <span
+										style="color:var(--indusind-red)">*</span></label>
+								<input type="text" class="form-control" id="mBenAcct">
+							</div>
+							<div class="col-md-4">
+								<label class="form-label" for="mBenEmail">Beneficiary Email</label>
+								<input type="email" class="form-control" id="mBenEmail" placeholder="Optional">
+							</div>
+							<div class="col-md-4">
+								<label class="form-label" for="mBenMobile">Beneficiary Mobile</label>
+								<input type="text" class="form-control" id="mBenMobile" placeholder="Optional">
+							</div>
+						</div>
+						<div class="d-flex gap-2 mt-3">
+							<button type="button" class="btn btn-indusind" id="manualPayBtn">Pay Manually</button>
+							<button type="button" class="btn btn-reset" id="manualResetBtn">Clear</button>
+						</div>
+					</form>
+				</div>
+			</div>
+
+			<div class="section-card">
+				<div class="section-head">
+					<h6>Manual Payment History</h6>
+					<span class="small text-muted">Synced to Catalyst</span>
+				</div>
+				<ul id="manualHistory" class="list-group list-group-flush"></ul>
+				<nav id="manualPagination" style="display:none;" aria-label="Manual payments pagination">
+					<ul class="pagination pagination-sm justify-content-between mb-0">
+						<li class="page-item" id="manualPrevItem"><button class="page-link"
+								id="manualPrevBtn">&larr; Prev</button></li>
+						<li class="page-item disabled"><span class="page-link border-0 bg-transparent text-muted"
+								id="manualPageInfo"></span></li>
+						<li class="page-item" id="manualNextItem"><button class="page-link"
+								id="manualNextBtn">Next &rarr;</button></li>
+					</ul>
+				</nav>
+			</div>
+		</div><!-- /#tab-manual -->
+
+		</div><!-- /.tab-content -->
 	</div>
 
 	<div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:1100;">
@@ -548,6 +722,77 @@
 		const STATUS_CHECK_INTERVAL_MS = 5 * 60 * 1000;
 		let statusSchedulerTimer = null;
 		let statusSchedulerRunning = false;
+
+		// ---- Catalyst-backed persistence (replaces localStorage) ----
+		const CATALYST_BASE_URL =
+			"https://project-rainfall-60040525184.development.catalystserverless.in/server/project_rainfall_function";
+		const CATALYST_STATE_API = `${CATALYST_BASE_URL}/appstate`;
+
+		// Keys that used to live in localStorage and are now stored in Catalyst.
+		const APP_STATE_KEYS = [
+			"indusindPaymentStatus",
+			"indusindManualPayments",
+			"bankFilterSettings"
+		];
+
+		// In-memory copy of every persisted key. Hydrated once from Catalyst on load.
+		const appStateCache = {};
+
+		async function catalystStateGet(key) {
+			const options = {
+				url: `${CATALYST_STATE_API}?key=${encodeURIComponent(key)}`,
+				method: "GET",
+				header: [{ key: "Accept", value: "application/json" }]
+			};
+
+			const value = await ZFAPPS.request(options);
+
+			const text = typeof value?.data?.body === "string"
+				? value.data.body
+				: JSON.stringify(value?.data?.body || value?.data || {});
+
+			let body = {};
+			try { body = text ? JSON.parse(text) : {}; } catch (_) { body = {}; }
+
+			// Endpoint returns { key, value }, where value is the stored JSON (or null).
+			return body?.value ?? null;
+		}
+
+		async function catalystStateSet(key, value) {
+			appStateCache[key] = value;
+
+			const options = {
+				url: CATALYST_STATE_API,
+				method: "POST",
+				header: [
+					{ key: "Content-Type", value: "application/json" },
+					{ key: "Accept", value: "application/json" }
+				],
+				body: { mode: "raw", raw: JSON.stringify({ key, value }) }
+			};
+
+			try {
+				await ZFAPPS.request(options);
+			} catch (error) {
+				console.error(`Failed to persist "${key}" to Catalyst:`, error);
+				if (typeof showToast === "function") {
+					showToast(`Could not save "${key}" to the server.`, "danger");
+				}
+			}
+		}
+
+		async function hydrateAppState() {
+			const results = await Promise.allSettled(
+				APP_STATE_KEYS.map(key => catalystStateGet(key))
+			);
+
+			APP_STATE_KEYS.forEach((key, index) => {
+				appStateCache[key] =
+					results[index].status === "fulfilled"
+						? results[index].value
+						: null;
+			});
+		}
 
 		let vendorCache = new Map();
 
@@ -667,9 +912,8 @@
 
 		function loadPaymentStatuses() {
 			try {
-				const saved = localStorage.getItem(PAYMENT_STATUS_KEY);
-				if (!saved) return;
-				const data = JSON.parse(saved);
+				const data = appStateCache[PAYMENT_STATUS_KEY];
+				if (!data || typeof data !== "object") return;
 				paymentStatusMap = new Map(Object.entries(data));
 			} catch (error) {
 				console.warn("Could not load payment statuses", error);
@@ -678,7 +922,7 @@
 
 		function savePaymentStatuses() {
 			const data = Object.fromEntries(paymentStatusMap.entries());
-			localStorage.setItem(PAYMENT_STATUS_KEY, JSON.stringify(data));
+			catalystStateSet(PAYMENT_STATUS_KEY, data);
 		}
 
 		function escapeHtml(value) {
@@ -890,13 +1134,14 @@
 		}
 
 		function getPaymentReference(paymentId) {
+			const saved = paymentStatusMap.get(String(paymentId));
+
 			const payment = allDraftPayments.find(
 				p => String(p.payment_id) === String(paymentId)
 			);
 
-			if (!payment) return "";
-
-			const saved = paymentStatusMap.get(String(paymentId));
+			// Manual payments are not in allDraftPayments; fall back to the stored reference.
+			if (!payment) return String(saved?.custRefNo || "");
 
 			return String(
 				saved?.custRefNo ||
@@ -1284,10 +1529,20 @@
 		}
 
 		window.onload = function () {
-			loadPaymentStatuses();
-
-			ZFAPPS.extension.init().then((App) => {
+			ZFAPPS.extension.init().then(async (App) => {
 				ZFAPPS.invoke('RESIZE', { width: '100%', height: '100%' });
+
+				// Load every persisted store from Catalyst before the first render.
+				try {
+					await hydrateAppState();
+				} catch (error) {
+					console.warn("Could not hydrate state from Catalyst", error);
+				}
+
+				loadPaymentStatuses();
+				if (typeof loadFilterSettings === "function") loadFilterSettings();
+				if (typeof loadManualPayments === "function") loadManualPayments();
+				if (typeof renderManualHistory === "function") renderManualHistory();
 
 				ZFAPPS.get('organization').then((res) => {
 					orgId = res.organization.organization_id;
@@ -1534,12 +1789,19 @@
 			);
 		}
 
+		// Draft payment ids + manual payment ids, for the status enquiry scheduler.
+		function getStatusTrackableIds() {
+			const draftIds = allDraftPayments.map(p => String(p.payment_id));
+			const manualIds = (typeof manualPayments !== "undefined" && Array.isArray(manualPayments))
+				? manualPayments.map(m => String(m.id))
+				: [];
+			return [...new Set([...draftIds, ...manualIds])];
+		}
+
 		async function runScheduledStatusUpdate() {
 			if (statusSchedulerRunning) return;
 
-			const ids = allDraftPayments
-				.map(p => String(p.payment_id))
-				.filter(isStatusCheckAllowed);
+			const ids = getStatusTrackableIds().filter(isStatusCheckAllowed);
 
 			if (!ids.length) {
 				updateStatusScheduler();
@@ -1549,6 +1811,7 @@
 			statusSchedulerRunning = true;
 			try {
 				await fetchSelectedStatuses(ids, { silent: true, scheduled: true });
+				if (typeof renderManualHistory === "function") renderManualHistory();
 			} catch (error) {
 				console.warn("Automatic status update failed:", error);
 			} finally {
@@ -1558,7 +1821,7 @@
 		}
 
 		function updateStatusScheduler() {
-			const active = allDraftPayments.some(p => isStatusCheckAllowed(p.payment_id));
+			const active = getStatusTrackableIds().some(id => isStatusCheckAllowed(id));
 			const badge = document.getElementById("schedulerBadge");
 
 			if (active && !statusSchedulerTimer) {
@@ -1916,9 +2179,8 @@
 
 		function loadFilterSettings() {
 			try {
-				const saved = localStorage.getItem(FILTER_KEY);
-				if (!saved) return;
-				const data = JSON.parse(saved);
+				const data = appStateCache[FILTER_KEY];
+				if (!data || typeof data !== 'object') return;
 				document.getElementById('maker').value = data.maker || '';
 				document.getElementById('authorizer').value = data.authorizer || '';
 				document.getElementById('bank').value = data.bank || '';
@@ -1933,7 +2195,7 @@
 				authorizer: document.getElementById('authorizer').value,
 				bank: document.getElementById('bank').value
 			};
-			localStorage.setItem(FILTER_KEY, JSON.stringify(filterData));
+			catalystStateSet(FILTER_KEY, filterData);
 			document.getElementById('filterToastMsg').innerText = 'Filter settings saved successfully.';
 			bootstrap.Toast.getOrCreateInstance(document.getElementById('filterToast')).show();
 		});
@@ -1942,12 +2204,12 @@
 			document.getElementById('maker').value = '';
 			document.getElementById('authorizer').value = '';
 			document.getElementById('bank').value = '';
-			localStorage.removeItem(FILTER_KEY);
+			catalystStateSet(FILTER_KEY, null);
 			document.getElementById('filterToastMsg').innerText = 'Filter settings reset.';
 			bootstrap.Toast.getOrCreateInstance(document.getElementById('filterToast')).show();
 		});
 
-		loadFilterSettings();
+		// loadFilterSettings() runs from window.onload, after Catalyst state is hydrated.
 
 		// Update the payment row markup to match the IndusInd UI without changing
 		// payment selection/submission logic.
@@ -2217,6 +2479,359 @@
 			</div>
 		</div>
 	</div>
+
+	<script>
+		// --- Manual Payment tab: free-form beneficiary, bank-only, one payment at a time ---
+		const MANUAL_PAYMENTS_KEY = "indusindManualPayments";
+		const MANUAL_PAGE_SIZE = 5;
+		let manualPayments = [];
+		let manualCurrentPage = 1;
+
+		function loadManualPayments() {
+			try {
+				const data = appStateCache[MANUAL_PAYMENTS_KEY];
+				manualPayments = Array.isArray(data) ? data : [];
+			} catch (error) {
+				console.warn("Could not load manual payments", error);
+				manualPayments = [];
+			}
+		}
+
+		function saveManualPayments() {
+			catalystStateSet(MANUAL_PAYMENTS_KEY, manualPayments);
+		}
+
+		function readManualForm() {
+			return {
+				custRefNo: document.getElementById("mReference").value.trim(),
+				tranType: document.getElementById("mMode").value,
+				amount: document.getElementById("mAmount").value,
+				valueDate: document.getElementById("mValueDate").value,
+				benCode: document.getElementById("mBenCode").value.trim(),
+				benName: document.getElementById("mBenName").value.trim(),
+				benIFSC: document.getElementById("mBenIFSC").value.trim().toUpperCase(),
+				benAcctNo: document.getElementById("mBenAcct").value.trim(),
+				benEmail: document.getElementById("mBenEmail").value.trim(),
+				benMobile: document.getElementById("mBenMobile").value.trim()
+			};
+		}
+
+		function resetManualForm() {
+			document.getElementById("manualForm").reset();
+		}
+
+		function buildManualBankPayment(m) {
+			return {
+				tranType: m.tranType || "NEFT",
+				custRefNo: m.custRefNo || "",
+				amount: Number(m.amount || 0),
+				debitAcctNo: document.getElementById("bank").value || "",
+				valueDate: m.valueDate || "",
+				benCode: m.benCode || "",
+				benName: m.benName || "",
+				benIFSC: m.benIFSC || "",
+				benAcctNo: m.benAcctNo || "",
+				benEmail: m.benEmail || "",
+				benMobile: m.benMobile || "",
+				reserve1: "",
+				reserve2: "",
+				reserve3: ""
+			};
+		}
+
+		function buildManualMultiPayPayload(m) {
+			const makerId = document.getElementById("maker").value;
+			const checkerId = document.getElementById("authorizer").value;
+			const debitAcctNumber = document.getElementById("bank").value;
+
+			if (!makerId) throw new Error("Please select Maker in Settings.");
+			if (!checkerId) throw new Error("Please select Authorizer in Settings.");
+			if (!debitAcctNumber) throw new Error("Please select Bank account in Settings.");
+
+			const payment = buildManualBankPayment(m);
+
+			if (!payment.benName || !payment.benIFSC || !payment.benAcctNo) {
+				throw new Error("Beneficiary name, IFSC and account number are required.");
+			}
+
+			if (!payment.valueDate) {
+				throw new Error("Value Date is required.");
+			}
+
+			// Reuse the same amount/mode rules as the draft flow.
+			validatePaymentRules([{
+				amount: payment.amount,
+				payment_mode: payment.tranType,
+				payment_number: payment.custRefNo || "Manual payment"
+			}]);
+
+			return {
+				multiPayReq: {
+					header: {
+						BatchId: generateUniqueBatchId(),
+						batchCount: "1",
+						batchAmount: String(Number(payment.amount || 0)),
+						makerId,
+						checkerId,
+						payMode: "",
+						custId: "10055592",
+						debitAcctNumber
+					},
+					body: { payment: [payment] }
+				}
+			};
+		}
+
+		async function submitManualPayment() {
+			const button = document.getElementById("manualPayBtn");
+			const form = readManualForm();
+
+			if (!form.custRefNo) {
+				form.custRefNo = "MAN" + Date.now();
+			}
+
+			let payload;
+			try {
+				payload = buildManualMultiPayPayload(form);
+			} catch (error) {
+				showToast(error.message, "danger");
+				return;
+			}
+
+			const manualId = "MANUAL-" + form.custRefNo;
+
+			if (manualPayments.some(x => x.id === manualId)) {
+				showToast("A manual payment with this reference already exists.", "danger");
+				return;
+			}
+
+			button.disabled = true;
+			const oldText = button.innerHTML;
+			button.innerHTML = "Submitting...";
+
+			const record = { id: manualId, ...form, createdAt: new Date().toISOString() };
+
+			try {
+				const options = {
+					url: CATALYST_PAYMENT_API,
+					method: "POST",
+					header: [
+						{ key: "Content-Type", value: "application/json" },
+						{ key: "Accept", value: "application/json" }
+					],
+					body: { mode: "raw", raw: JSON.stringify(payload) }
+				};
+
+				console.log("Manual payment payload:", JSON.stringify(payload, null, 2));
+
+				const value = await ZFAPPS.request(options);
+				const responseText =
+					typeof value?.data?.body === "string"
+						? value.data.body
+						: JSON.stringify(value?.data?.body || value?.data || {});
+
+				let responseBody = {};
+				try {
+					responseBody = responseText ? JSON.parse(responseText) : {};
+				} catch (_) {
+					responseBody = { rawResponse: responseText };
+				}
+
+				console.log("Manual payment response:", responseBody);
+
+				manualPayments.unshift(record);
+				manualCurrentPage = 1;
+				saveManualPayments();
+
+				const bankStatus = applyCatalystSubmissionStatus([manualId], responseBody, payload);
+
+				renderManualHistory();
+				resetManualForm();
+
+				showToast(
+					`Manual payment submitted. ${bankStatus.statusDesc}` +
+					(bankStatus.batchRefNo ? ` (${bankStatus.batchRefNo})` : ""),
+					bankStatus.error ? "danger" : "success"
+				);
+			} catch (error) {
+				console.error("Manual payment failed:", error);
+
+				if (!manualPayments.some(x => x.id === manualId)) {
+					manualPayments.unshift(record);
+					manualCurrentPage = 1;
+					saveManualPayments();
+				}
+
+				setPaymentStatus(
+					manualId,
+					"failed",
+					"Submission Failed",
+					error.message || "Manual payment submission failed."
+				);
+
+				renderManualHistory();
+				showToast(error.message || "Manual payment submission failed.", "danger");
+			} finally {
+				button.disabled = false;
+				button.innerHTML = oldText;
+			}
+		}
+
+		function renderManualPagination() {
+			const nav = document.getElementById("manualPagination");
+			if (!nav) return;
+
+			const totalPages = Math.ceil(manualPayments.length / MANUAL_PAGE_SIZE);
+
+			if (totalPages <= 1) {
+				nav.style.display = "none";
+				return;
+			}
+
+			nav.style.display = "block";
+			document.getElementById("manualPageInfo").innerText =
+				`Page ${manualCurrentPage} of ${totalPages}`;
+			document.getElementById("manualPrevItem")
+				.classList.toggle("disabled", manualCurrentPage === 1);
+			document.getElementById("manualNextItem")
+				.classList.toggle("disabled", manualCurrentPage === totalPages);
+		}
+
+		function renderManualHistory() {
+			const wrap = document.getElementById("manualHistory");
+			if (!wrap) return;
+
+			if (!manualPayments.length) {
+				wrap.innerHTML =
+					'<li class="list-group-item text-muted small">No manual payments yet.</li>';
+				renderManualPagination();
+				return;
+			}
+
+			const totalPages = Math.ceil(manualPayments.length / MANUAL_PAGE_SIZE);
+			manualCurrentPage = Math.min(Math.max(manualCurrentPage, 1), totalPages);
+
+			const start = (manualCurrentPage - 1) * MANUAL_PAGE_SIZE;
+			const pageItems = manualPayments.slice(start, start + MANUAL_PAGE_SIZE);
+
+			wrap.innerHTML = pageItems.map(m => {
+				const st = paymentStatusMap.get(String(m.id));
+				const allowed = isStatusCheckAllowed(m.id);
+				const detail = st ? (st.headerError || st.statusDesc || st.message || "") : "";
+				const amount = Number(m.amount || 0)
+					.toLocaleString("en-IN", { minimumFractionDigits: 2 });
+
+				return `
+					<li class="list-group-item">
+						<div class="pm-info">
+							<div class="pm-number">
+								${escapeHtml(m.custRefNo || "")}
+								<span class="pm-mode">${escapeHtml(m.tranType || "")}</span>
+							</div>
+							<div class="pm-vendor">
+								${escapeHtml(m.benName || "")} &middot; A/C ${escapeHtml(m.benAcctNo || "")} &middot; ${escapeHtml(m.benIFSC || "")}
+							</div>
+						</div>
+						<div class="status-wrap">
+							<div class="d-flex flex-column align-items-end gap-1">
+								${getPaymentStatus(m.id)}
+								${detail
+						? `<small class="text-muted text-end" style="max-width:240px;">${escapeHtml(detail)}</small>`
+						: ""}
+							</div>
+						</div>
+						<div class="d-flex flex-column align-items-end gap-1">
+							<span class="pm-amount">&#8377;${escapeHtml(amount)}</span>
+							<button type="button"
+								class="btn btn-sm btn-outline-secondary manual-status-btn"
+								data-id="${escapeHtml(m.id)}" ${allowed ? "" : "disabled"}
+								title="${allowed ? "Fetch latest bank status" : "Available only after submit and Batch Received"}">
+								&#8635; Status
+							</button>
+							<button type="button"
+								class="btn btn-sm btn-outline-secondary manual-copy-btn"
+								data-id="${escapeHtml(m.id)}"
+								title="Copy these details into the form above">
+								&#8593; Use details
+							</button>
+						</div>
+					</li>
+				`;
+			}).join("");
+
+			wrap.querySelectorAll(".manual-status-btn").forEach(btn => {
+				btn.addEventListener("click", async (e) => {
+					const el = e.currentTarget;
+					const id = el.getAttribute("data-id");
+
+					el.disabled = true;
+					el.innerHTML = "Checking...";
+
+					try {
+						await fetchAndApplyPaymentStatus(id);
+					} catch (error) {
+						showToast(error.message || "Could not fetch payment status.", "danger");
+					} finally {
+						renderManualHistory();
+					}
+				});
+			});
+
+			wrap.querySelectorAll(".manual-copy-btn").forEach(btn => {
+				btn.addEventListener("click", (e) => {
+					const id = e.currentTarget.getAttribute("data-id");
+					const record = manualPayments.find(x => String(x.id) === String(id));
+					fillManualFormFromRecord(record);
+				});
+			});
+
+			renderManualPagination();
+		}
+
+		function fillManualFormFromRecord(m) {
+			if (!m) return;
+
+			// Reference No and Payment Mode are intentionally not copied.
+			document.getElementById("mReference").value = "";
+			document.getElementById("mAmount").value = m.amount || "";
+			document.getElementById("mValueDate").value = m.valueDate || "";
+			document.getElementById("mBenCode").value = m.benCode || "";
+			document.getElementById("mBenName").value = m.benName || "";
+			document.getElementById("mBenIFSC").value = m.benIFSC || "";
+			document.getElementById("mBenAcct").value = m.benAcctNo || "";
+			document.getElementById("mBenEmail").value = m.benEmail || "";
+			document.getElementById("mBenMobile").value = m.benMobile || "";
+
+			const card = document.getElementById("manualCard");
+			if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+
+			showToast(
+				"Details copied to the form. A new Reference No will be generated on submit.",
+				"success"
+			);
+		}
+
+		document.getElementById("manualPayBtn").addEventListener("click", submitManualPayment);
+		document.getElementById("manualResetBtn").addEventListener("click", resetManualForm);
+
+		document.getElementById("manualPrevBtn").addEventListener("click", () => {
+			if (manualCurrentPage > 1) {
+				manualCurrentPage--;
+				renderManualHistory();
+			}
+		});
+
+		document.getElementById("manualNextBtn").addEventListener("click", () => {
+			const totalPages = Math.ceil(manualPayments.length / MANUAL_PAGE_SIZE);
+			if (manualCurrentPage < totalPages) {
+				manualCurrentPage++;
+				renderManualHistory();
+			}
+		});
+
+		// loadManualPayments() / renderManualHistory() run from window.onload,
+		// after Catalyst state is hydrated.
+	</script>
 
 </body>
 
