@@ -1,10 +1,11 @@
 import axios from 'axios';
 import express from "express";
-import catalyst from "zcatalyst-sdk-node";
 import { hexToByte } from "./hexToByte.js";
 import { generateHashStringKey, getExactHash } from "./computeHashSHA256.js";
 import { encrypt } from "./encryptUtil.js";
 import { decrypt, jsonEscape } from "./decrypt.js";
+import { LISTS, queryItems, findByTitle, upsertByTitle, deleteItem } from "./sharepoint.js";
+
 
 const app = express();
 app.use(express.json());
@@ -132,11 +133,11 @@ app.post("/transactionposting", async (req, res) => {
 });
 
 // ==========================================
-// 4. APP STATE  (widget persistence — replaces the widget's localStorage)
+// 4. APP STATE  (widget persistence — stored in SharePoint list "AppState")
 // ==========================================
-// Requires a Data Store table "AppState" with columns:
-//   StateKey    Varchar(255)  Unique, Mandatory
-//   StateValue  Text          (JSON string)
+// SharePoint list "AppState" (auto-created on first use, see sharepoint.js):
+//   Title       Single line of text  — the state key
+//   StateValue  Multiple lines (plain) — JSON string
 //
 //   GET  /appstate?key=<key>   -> { key, value }   (value is null when unset)
 //   POST /appstate  { key, value }  -> { key, saved: true }   (value:null clears)
@@ -145,21 +146,9 @@ app.post("/transactionposting", async (req, res) => {
 //   indusindPaymentStatus   { [paymentId]: {...} }
 //   indusindManualPayments  [ {...} ]
 //   bankFilterSettings      { maker, authorizer, bank }
+//   indusindTrackedPayments [ {...} ]
 
-const APPSTATE_TABLE = "AppState";
-
-async function findAppStateRow(catalystApp, key) {
-    const safeKey = String(key).replace(/'/g, "''");
-    const query =
-        `SELECT ROWID, StateKey, StateValue FROM ${APPSTATE_TABLE} ` +
-        `WHERE StateKey = '${safeKey}' LIMIT 1`;
-
-    const rows = await catalystApp.zcql().executeZCQLQuery(query);
-    if (!rows || !rows.length) return null;
-
-    // ZCQL rows are namespaced by table name.
-    return rows[0][APPSTATE_TABLE] || rows[0];
-}
+const APPSTATE_MAX_CHARS = 63000;
 
 app.get("/appstate", async (req, res) => {
     const key = String(req.query.key || "").trim();
@@ -168,12 +157,12 @@ app.get("/appstate", async (req, res) => {
     }
 
     try {
-        const catalystApp = catalyst.initialize(req);
-        const row = await findAppStateRow(catalystApp, key);
+        const item = await findByTitle(LISTS.AppState, key);
+        const raw = item?.fields?.StateValue;
 
         let value = null;
-        if (row && row.StateValue != null) {
-            try { value = JSON.parse(row.StateValue); } catch (_) { value = null; }
+        if (raw != null) {
+            try { value = JSON.parse(raw); } catch (_) { value = null; }
         }
 
         res.status(200).json({ key, value });
@@ -189,24 +178,126 @@ app.post("/appstate", async (req, res) => {
         return res.status(400).json({ status: "error", message: "Missing 'key' in body." });
     }
 
+    if (key.length > 255) {
+        return res.status(400).json({ status: "error", message: "'key' must be 255 characters or fewer." });
+    }
+
     // `value` may be null on purpose (used to clear a key).
     const stateValue = JSON.stringify((req.body || {}).value ?? null);
 
+    // SharePoint plain multi-line text holds at most 63,999 characters.
+    if (stateValue.length > APPSTATE_MAX_CHARS) {
+        return res.status(413).json({
+            status: "error",
+            message: `Value for '${key}' is ${stateValue.length} characters; the limit is ${APPSTATE_MAX_CHARS}.`
+        });
+    }
+
     try {
-        const catalystApp = catalyst.initialize(req);
-        const table = catalystApp.datastore().table(APPSTATE_TABLE);
-
-        const existing = await findAppStateRow(catalystApp, key);
-
-        if (existing && existing.ROWID) {
-            await table.updateRow({ ROWID: existing.ROWID, StateKey: key, StateValue: stateValue });
-        } else {
-            await table.insertRow({ StateKey: key, StateValue: stateValue });
-        }
-
+        await upsertByTitle(LISTS.AppState, key, { StateValue: stateValue });
         res.status(200).json({ key, saved: true });
     } catch (error) {
         console.error("Error in POST /appstate:", error.message);
+        res.status(500).json({ status: "error", message: error.message });
+    }
+});
+
+// ==========================================
+// 5. PAID PAYMENTS  (SharePoint list "PaidPayments" — expires 1 day after being marked Paid)
+// ==========================================
+// SharePoint list "PaidPayments" (auto-created on first use, see sharepoint.js):
+//   Title = "<Source>:<PaymentId>" (unique key), Source, PaymentId, PaymentNumber,
+//   VendorName, Amount, UTR, PaidAt (ISO), ExpireAt (Number, epoch SECONDS)
+//
+// SharePoint has no native TTL, so expiry is enforced here: GET only returns
+// rows whose ExpireAt is in the future, and deletes the expired ones it sees.
+//
+//   POST /paidpayments          { source, paymentId, paymentNumber, vendorName, amount, utr }
+//   GET  /paidpayments?source=  -> { status, source, items: [...] }
+//   POST /paidpayments/delete   { source, paymentId }   (explicit early delete)
+
+const PAID_TTL_SECONDS = 24 * 60 * 60; // 1 day
+const PAID_FIELDS = ["Source", "PaymentId", "PaymentNumber", "VendorName", "Amount", "UTR", "PaidAt", "ExpireAt"];
+const paidKey = (source, paymentId) => `${source}:${paymentId}`;
+
+app.post("/paidpayments", async (req, res) => {
+    const body = req.body || {};
+    const source = String(body.source || "").trim();
+    const paymentId = String(body.paymentId || "").trim();
+
+    if (!source || !paymentId) {
+        return res.status(400).json({ status: "error", message: "Missing 'source' or 'paymentId'." });
+    }
+
+    const paidAt = new Date().toISOString();
+    const expireAt = Math.floor(Date.now() / 1000) + PAID_TTL_SECONDS;
+
+    try {
+        await upsertByTitle(LISTS.PaidPayments, paidKey(source, paymentId), {
+            Source: source,
+            PaymentId: paymentId,
+            PaymentNumber: String(body.paymentNumber || ""),
+            VendorName: String(body.vendorName || ""),
+            Amount: String(body.amount ?? ""),
+            UTR: String(body.utr || ""),
+            PaidAt: paidAt,
+            ExpireAt: expireAt
+        });
+
+        res.status(200).json({ status: "success", source, paymentId, paidAt, expireAt });
+    } catch (error) {
+        console.error("Error in POST /paidpayments:", error.message);
+        res.status(500).json({ status: "error", message: error.message });
+    }
+});
+
+app.get("/paidpayments", async (req, res) => {
+    const source = String(req.query.source || "").trim();
+
+    if (!source) {
+        return res.status(400).json({ status: "error", message: "Missing 'source' query parameter." });
+    }
+
+    try {
+        const rows = await queryItems(LISTS.PaidPayments, `fields/Source eq '${source.replace(/'/g, "''")}'`);
+        const now = Math.floor(Date.now() / 1000);
+
+        const live = [];
+        const expired = [];
+        for (const row of rows) {
+            (Number(row.fields?.ExpireAt) > now ? live : expired).push(row);
+        }
+
+        // Housekeeping in place of a native TTL; a failure here must not fail the read.
+        await Promise.allSettled(expired.map(row => deleteItem(LISTS.PaidPayments, row.id)));
+
+        const items = live.map(row =>
+            Object.fromEntries(PAID_FIELDS.map(f => [f, row.fields?.[f] ?? ""]))
+        );
+
+        res.status(200).json({ status: "success", source, items });
+    } catch (error) {
+        console.error("Error in GET /paidpayments:", error.message);
+        res.status(500).json({ status: "error", message: error.message });
+    }
+});
+
+app.post("/paidpayments/delete", async (req, res) => {
+    const body = req.body || {};
+    const source = String(body.source || "").trim();
+    const paymentId = String(body.paymentId || "").trim();
+
+    if (!source || !paymentId) {
+        return res.status(400).json({ status: "error", message: "Missing 'source' or 'paymentId'." });
+    }
+
+    try {
+        const item = await findByTitle(LISTS.PaidPayments, paidKey(source, paymentId));
+        if (item) await deleteItem(LISTS.PaidPayments, item.id);
+
+        res.status(200).json({ status: "success", source, paymentId, deleted: true });
+    } catch (error) {
+        console.error("Error in POST /paidpayments/delete:", error.message);
         res.status(500).json({ status: "error", message: error.message });
     }
 });

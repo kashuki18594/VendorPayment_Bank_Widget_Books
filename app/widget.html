@@ -666,7 +666,7 @@
 			<div class="section-card">
 				<div class="section-head">
 					<h6>Manual Payment History</h6>
-					<span class="small text-muted">Synced to Catalyst</span>
+					<span class="small text-muted">Saved to SharePoint</span>
 				</div>
 				<ul id="manualHistory" class="list-group list-group-flush"></ul>
 				<nav id="manualPagination" style="display:none;" aria-label="Manual payments pagination">
@@ -723,20 +723,73 @@
 		let statusSchedulerTimer = null;
 		let statusSchedulerRunning = false;
 
-		// ---- Catalyst-backed persistence (replaces localStorage) ----
+		// Snapshot of every payment we've ever submitted to the bank, keyed by
+		// Zoho payment_id. Once Zoho moves a payment out of the Draft filter
+		// (after /submit) it drops out of allDraftPayments, so this cache is
+		// what keeps the row (and its status) visible after a refresh.
+		const TRACKED_PAYMENTS_KEY = "indusindTrackedPayments";
+		const TRACKED_PAYMENTS_LIMIT = 200;
+		let trackedPaymentsCache = [];
+
+		// ---- Server-backed persistence (Catalyst function -> SharePoint list "AppState") ----
 		const CATALYST_BASE_URL =
 			"https://project-rainfall-60040525184.development.catalystserverless.in/server/project_rainfall_function";
 		const CATALYST_STATE_API = `${CATALYST_BASE_URL}/appstate`;
 
-		// Keys that used to live in localStorage and are now stored in Catalyst.
+		// Keys stored on the server (one SharePoint list row each).
 		const APP_STATE_KEYS = [
 			"indusindPaymentStatus",
 			"indusindManualPayments",
-			"bankFilterSettings"
+			"bankFilterSettings",
+			"indusindTrackedPayments"
 		];
 
-		// In-memory copy of every persisted key. Hydrated once from Catalyst on load.
+		// In-memory copy of every persisted key. Hydrated once from the server on load.
 		const appStateCache = {};
+
+		// Keys that could not be loaded on startup. Saving one of these would
+		// overwrite the server copy with an empty/partial value (e.g. wiping the
+		// "already submitted" flags that prevent double payment), so saves are
+		// refused until the widget is reloaded successfully.
+		const stateLoadFailed = new Set();
+
+		// SharePoint "Multiple lines of text" holds up to 63,999 characters.
+		// Stay safely under that so a save never fails on size.
+		const STATE_SAFE_LIMIT = 60000;
+
+		// Drops the oldest entries from a newest-first array until its JSON
+		// serialization fits within the safe limit. Returns the (possibly
+		// unchanged) array; logs when something was actually dropped.
+		function trimArrayToFit(arr, label) {
+			let trimmed = arr;
+			while (trimmed.length > 0 && JSON.stringify(trimmed).length > STATE_SAFE_LIMIT) {
+				trimmed = trimmed.slice(0, -1);
+			}
+			if (trimmed.length < arr.length) {
+				console.warn(
+					`${label}: trimmed ${arr.length - trimmed.length} oldest entr${arr.length - trimmed.length === 1 ? "y" : "ies"} ` +
+					`(kept ${trimmed.length}) to stay under the ${STATE_SAFE_LIMIT}-char storage limit.`
+				);
+			}
+			return trimmed;
+		}
+
+		// ZFAPPS.request() resolves even when the Catalyst function itself
+		// returned a 4xx/5xx (it just wraps that in data.status_code / data.body)
+		// — it only rejects on a real transport failure. So every caller here
+		// must inspect the parsed body itself to notice a backend-side failure.
+		function parseCatalystStateResponse(response) {
+			const text = typeof response?.data?.body === "string"
+				? response.data.body
+				: JSON.stringify(response?.data?.body || response?.data || {});
+
+			let body = {};
+			try { body = text ? JSON.parse(text) : {}; } catch (_) { body = {}; }
+
+			const httpStatus = Number(response?.data?.status_code) || 200;
+
+			return { body, httpStatus, failed: body?.status === "error" || httpStatus >= 400 };
+		}
 
 		async function catalystStateGet(key) {
 			const options = {
@@ -745,22 +798,25 @@
 				header: [{ key: "Accept", value: "application/json" }]
 			};
 
-			const value = await ZFAPPS.request(options);
+			const response = await ZFAPPS.request(options);
+			const { body, httpStatus, failed } = parseCatalystStateResponse(response);
 
-			const text = typeof value?.data?.body === "string"
-				? value.data.body
-				: JSON.stringify(value?.data?.body || value?.data || {});
-
-			let body = {};
-			try { body = text ? JSON.parse(text) : {}; } catch (_) { body = {}; }
+			if (failed) {
+				throw new Error(body?.message || `Load failed (HTTP ${httpStatus}).`);
+			}
 
 			// Endpoint returns { key, value }, where value is the stored JSON (or null).
 			return body?.value ?? null;
 		}
 
-		async function catalystStateSet(key, value) {
-			appStateCache[key] = value;
+		// Saves are serialized per key: while one save is in flight, later calls
+		// only mark the key dirty, and the newest value is sent once the current
+		// request finishes. This stops overlapping requests from landing out of
+		// order and overwriting newer data with an older snapshot.
+		const stateSaveInFlight = new Map(); // key -> Promise
+		const stateSaveDirty = new Set();
 
+		async function sendStateToServer(key) {
 			const options = {
 				url: CATALYST_STATE_API,
 				method: "POST",
@@ -768,17 +824,52 @@
 					{ key: "Content-Type", value: "application/json" },
 					{ key: "Accept", value: "application/json" }
 				],
-				body: { mode: "raw", raw: JSON.stringify({ key, value }) }
+				body: { mode: "raw", raw: JSON.stringify({ key, value: appStateCache[key] ?? null }) }
 			};
 
-			try {
-				await ZFAPPS.request(options);
-			} catch (error) {
-				console.error(`Failed to persist "${key}" to Catalyst:`, error);
-				if (typeof showToast === "function") {
-					showToast(`Could not save "${key}" to the server.`, "danger");
-				}
+			const response = await ZFAPPS.request(options);
+			const { body, httpStatus, failed } = parseCatalystStateResponse(response);
+
+			if (failed) {
+				throw new Error(body?.message || `Save failed (HTTP ${httpStatus}).`);
 			}
+		}
+
+		function catalystStateSet(key, value) {
+			appStateCache[key] = value;
+
+			if (stateLoadFailed.has(key)) {
+				const message = `"${key}" could not be loaded from the server, so it was not saved (to avoid overwriting existing data). Please reload the widget.`;
+				console.error(message);
+				if (typeof showToast === "function") showToast(message, "danger");
+				return Promise.resolve(false);
+			}
+
+			if (stateSaveInFlight.has(key)) {
+				stateSaveDirty.add(key);
+				return stateSaveInFlight.get(key);
+			}
+
+			const run = (async () => {
+				let ok = true;
+				do {
+					stateSaveDirty.delete(key);
+					try {
+						await sendStateToServer(key);
+					} catch (error) {
+						ok = false;
+						console.error(`Failed to persist "${key}" to the server:`, error);
+						if (typeof showToast === "function") {
+							showToast(`Could not save "${key}" to the server: ${error.message || "Unknown error"}`, "danger");
+						}
+					}
+				} while (stateSaveDirty.has(key));
+				stateSaveInFlight.delete(key);
+				return ok;
+			})();
+
+			stateSaveInFlight.set(key, run);
+			return run;
 		}
 
 		async function hydrateAppState() {
@@ -786,12 +877,215 @@
 				APP_STATE_KEYS.map(key => catalystStateGet(key))
 			);
 
+			stateLoadFailed.clear();
+
 			APP_STATE_KEYS.forEach((key, index) => {
-				appStateCache[key] =
-					results[index].status === "fulfilled"
-						? results[index].value
-						: null;
+				if (results[index].status === "fulfilled") {
+					appStateCache[key] = results[index].value;
+				} else {
+					appStateCache[key] = null;
+					stateLoadFailed.add(key);
+					console.warn(`Could not load "${key}" from the server:`, results[index].reason);
+				}
 			});
+
+			if (stateLoadFailed.size && typeof showToast === "function") {
+				showToast(
+					`Could not load saved data (${[...stateLoadFailed].join(", ")}). ` +
+					`Payments are disabled until the widget is reloaded.`,
+					"danger"
+				);
+			}
+		}
+
+		// Payment history must be loaded before anything is sent to the bank;
+		// otherwise "already submitted" checks can't be trusted.
+		function assertPaymentStateLoaded() {
+			if (stateLoadFailed.has("indusindPaymentStatus") || stateLoadFailed.has("indusindManualPayments")) {
+				throw new Error("Saved payment history could not be loaded. Reload the widget before making payments.");
+			}
+		}
+
+		// ---- Paid payments (SharePoint list "PaidPayments" — expire ~1 day after marking) ----
+		// Separate on purpose from "AppState" above: this only ever holds payments
+		// explicitly marked Paid; the server hides and removes rows older than 1 day.
+		const PAID_PAYMENTS_API = `${CATALYST_BASE_URL}/paidpayments`;
+
+		let paidDraftMap = new Map();  // String(payment_id) -> { PaymentId, PaidAt, UTR, ... }
+		let paidManualMap = new Map(); // String(manual id)   -> { PaymentId, PaidAt, UTR, ... }
+
+		async function parseCatalystJsonResponse(response) {
+			const text = typeof response?.data?.body === "string"
+				? response.data.body
+				: JSON.stringify(response?.data?.body || response?.data || {});
+
+			try { return text ? JSON.parse(text) : {}; } catch (_) { return {}; }
+		}
+
+		async function fetchPaidRecords(source) {
+			const options = {
+				url: `${PAID_PAYMENTS_API}?source=${encodeURIComponent(source)}`,
+				method: "GET",
+				header: [{ key: "Accept", value: "application/json" }]
+			};
+
+			const response = await ZFAPPS.request(options);
+			const body = await parseCatalystJsonResponse(response);
+
+			if (body?.status === "error") {
+				console.warn(`Could not load paid records for "${source}":`, body.message);
+				return [];
+			}
+
+			return Array.isArray(body?.items) ? body.items : [];
+		}
+
+		async function hydratePaidRecords() {
+			const [draftItems, manualItems] = await Promise.all([
+				fetchPaidRecords("draft").catch(() => []),
+				fetchPaidRecords("manual").catch(() => [])
+			]);
+
+			paidDraftMap = new Map(draftItems.map(it => [String(it.PaymentId), it]));
+			paidManualMap = new Map(manualItems.map(it => [String(it.PaymentId), it]));
+		}
+
+		// Marks a payment Paid in Catalyst. `source` is "draft" or "manual".
+		async function markPaymentPaidInCatalyst(record) {
+			const options = {
+				url: PAID_PAYMENTS_API,
+				method: "POST",
+				header: [
+					{ key: "Content-Type", value: "application/json" },
+					{ key: "Accept", value: "application/json" }
+				],
+				body: { mode: "raw", raw: JSON.stringify(record) }
+			};
+
+			const response = await ZFAPPS.request(options);
+			const body = await parseCatalystJsonResponse(response);
+
+			if (body?.status === "error") {
+				throw new Error(body.message || "Could not mark payment as Paid.");
+			}
+
+			return body;
+		}
+
+		async function deletePaidRecordInCatalyst(source, paymentId) {
+			const options = {
+				url: `${PAID_PAYMENTS_API}/delete`,
+				method: "POST",
+				header: [
+					{ key: "Content-Type", value: "application/json" },
+					{ key: "Accept", value: "application/json" }
+				],
+				body: { mode: "raw", raw: JSON.stringify({ source, paymentId }) }
+			};
+
+			const response = await ZFAPPS.request(options);
+			const body = await parseCatalystJsonResponse(response);
+
+			if (body?.status === "error") {
+				throw new Error(body.message || "Could not delete the Paid record.");
+			}
+
+			return body;
+		}
+
+		// Appends a note to the Zoho Books vendor payment's Description — does
+		// NOT touch amount, vendor, or accounts. Best-effort: a failure here is
+		// surfaced but never blocks the Catalyst Paid marker below.
+		async function appendBooksPaidNote(paymentId, utr) {
+			const getOptions = {
+				url: `https://www.zohoapis.in/books/v3/vendorpayments/${paymentId}`,
+				method: "GET",
+				url_query: [{ key: "organization_id", value: orgId }],
+				connection_link_name: "books"
+			};
+
+			const getResponse = await ZFAPPS.request(getOptions);
+			const getBody = typeof getResponse.data.body === "string"
+				? JSON.parse(getResponse.data.body)
+				: getResponse.data.body;
+
+			if (getBody.code !== 0 || !getBody.vendorpayment) {
+				throw new Error(getBody.message || "Could not load the payment from Zoho Books.");
+			}
+
+			const existingDescription = getBody.vendorpayment.description || "";
+			const note = `Paid via IndusInd Bank${utr ? ` — UTR: ${utr}` : ""} on ${new Date().toLocaleString("en-IN")}.`;
+			const newDescription = existingDescription ? `${existingDescription}\n${note}` : note;
+
+			const putOptions = {
+				url: `https://www.zohoapis.in/books/v3/vendorpayments/${paymentId}`,
+				method: "PUT",
+				url_query: [{ key: "organization_id", value: orgId }],
+				connection_link_name: "books",
+				body: { mode: "raw", raw: JSON.stringify({ description: newDescription }) }
+			};
+
+			const putResponse = await ZFAPPS.request(putOptions);
+			const putBody = typeof putResponse.data.body === "string"
+				? JSON.parse(putResponse.data.body)
+				: putResponse.data.body;
+
+			if (putBody.code !== 0) {
+				throw new Error(putBody.message || "Zoho Books update failed.");
+			}
+
+			return putBody;
+		}
+
+		// Marks a Books Draft-tab payment Paid: best-effort Books note, then the
+		// Catalyst NoSQL marker (source of truth for the Paid badge/TTL).
+		async function markDraftPaymentPaid(payment) {
+			const id = String(payment.payment_id);
+			const bankStatus = paymentStatusMap.get(id) || {};
+			const utr = bankStatus.utr || "";
+
+			let booksError = "";
+			try {
+				await appendBooksPaidNote(id, utr);
+			} catch (error) {
+				console.error("Books paid-note update failed:", error);
+				booksError = error.message || "Zoho Books update failed.";
+			}
+
+			await markPaymentPaidInCatalyst({
+				source: "draft",
+				paymentId: id,
+				paymentNumber: payment.payment_number || payment.reference_number || "",
+				vendorName: payment.vendor_name || "",
+				amount: payment.amount,
+				utr
+			});
+
+			paidDraftMap.set(id, { PaymentId: id, PaidAt: new Date().toISOString(), UTR: utr });
+			return { booksError };
+		}
+
+		// Marks a Manual-tab payment Paid — Catalyst only, no Books record exists for it.
+		async function markManualPaymentPaid(record) {
+			const id = String(record.id);
+			const bankStatus = paymentStatusMap.get(id) || {};
+			const utr = bankStatus.utr || "";
+
+			await markPaymentPaidInCatalyst({
+				source: "manual",
+				paymentId: id,
+				paymentNumber: record.custRefNo || "",
+				vendorName: record.benName || "",
+				amount: record.amount,
+				utr
+			});
+
+			paidManualMap.set(id, { PaymentId: id, PaidAt: new Date().toISOString(), UTR: utr });
+		}
+
+		async function deleteManualPaidRecord(id) {
+			await deletePaidRecordInCatalyst("manual", id);
+			paidManualMap.delete(String(id));
 		}
 
 		let vendorCache = new Map();
@@ -921,8 +1215,67 @@
 		}
 
 		function savePaymentStatuses() {
-			const data = Object.fromEntries(paymentStatusMap.entries());
-			catalystStateSet(PAYMENT_STATUS_KEY, data);
+			// Newest-first so trimming (if needed) drops the oldest statuses,
+			// not the ones someone is currently watching.
+			const entries = [...paymentStatusMap.entries()].sort(
+				(a, b) => new Date(b[1]?.updatedAt || 0) - new Date(a[1]?.updatedAt || 0)
+			);
+			const trimmed = trimArrayToFit(entries, "Payment statuses");
+			const data = Object.fromEntries(trimmed);
+			return catalystStateSet(PAYMENT_STATUS_KEY, data);
+		}
+
+		function loadTrackedPayments() {
+			try {
+				const data = appStateCache[TRACKED_PAYMENTS_KEY];
+				trackedPaymentsCache = Array.isArray(data) ? data : [];
+			} catch (error) {
+				console.warn("Could not load tracked payments", error);
+				trackedPaymentsCache = [];
+			}
+		}
+
+		function saveTrackedPayments() {
+			trackedPaymentsCache = trimArrayToFit(trackedPaymentsCache, "Tracked payments");
+			return catalystStateSet(TRACKED_PAYMENTS_KEY, trackedPaymentsCache);
+		}
+
+		// Remembers a snapshot of each payment so it keeps showing (with its
+		// bank status) once Zoho moves it out of the Draft filter.
+		function rememberTrackedPayments(paymentObjs) {
+			(paymentObjs || []).forEach(p => {
+				if (!p || p.payment_id === undefined || p.payment_id === null) return;
+
+				const snapshot = {
+					payment_id: p.payment_id,
+					payment_number: p.payment_number || "",
+					reference_number: p.reference_number || "",
+					vendor_id: p.vendor_id || "",
+					vendor_name: p.vendor_name || "",
+					amount: p.amount,
+					amount_formatted: p.amount_formatted || "",
+					payment_mode: p.payment_mode || "",
+					value_date: p.value_date || "",
+					date: p.date || ""
+				};
+
+				const idx = trackedPaymentsCache.findIndex(
+					x => String(x.payment_id) === String(p.payment_id)
+				);
+
+				if (idx >= 0) {
+					trackedPaymentsCache[idx] = { ...trackedPaymentsCache[idx], ...snapshot };
+				} else {
+					trackedPaymentsCache.unshift(snapshot);
+				}
+			});
+
+			trackedPaymentsCache = trackedPaymentsCache.slice(0, TRACKED_PAYMENTS_LIMIT);
+			return saveTrackedPayments();
+		}
+
+		function isPaymentAlreadySubmitted(paymentId) {
+			return Boolean(paymentStatusMap.get(String(paymentId))?.submittedToBank);
 		}
 
 		function escapeHtml(value) {
@@ -973,7 +1326,7 @@
 			return `<span class="payment-status pending" title="${title}">● ${escapeHtml(status.label || message || "Processing")}</span>`;
 		}
 
-		function setPaymentStatus(paymentId, state, label, message = "", extra = {}) {
+		function setPaymentStatus(paymentId, state, label, message = "", extra = {}, persist = true) {
 			paymentStatusMap.set(String(paymentId), {
 				state,
 				label,
@@ -981,7 +1334,10 @@
 				...extra,
 				updatedAt: new Date().toISOString()
 			});
-			savePaymentStatuses();
+			// `persist` is set to false by callers that update several payments
+			// in a loop (e.g. applyCatalystSubmissionStatus), so they can save
+			// once at the end instead of firing one overlapping request per row.
+			return persist ? savePaymentStatuses() : Promise.resolve();
 		}
 
 		function parseEscapedJson(value) {
@@ -1057,13 +1413,19 @@
 			};
 		}
 
-		function applyCatalystSubmissionStatus(paymentIds, catalystResponse, payload) {
+		async function applyCatalystSubmissionStatus(paymentIds, catalystResponse, payload) {
 			const root = parseCatalystBankResponse(catalystResponse);
 			const payResp = root?.PayResp || root?.data?.PayResp || null;
 			const header = payResp?.Header || root?.Header || {};
 			const transactions = Array.isArray(payResp?.Transaction) ? payResp.Transaction : [];
 
-			const headerError = String(header.Error || header.error || "").trim();
+			// The Catalyst function itself failed (bank rejected the HTTP call,
+			// timeout, bad credentials...). There is no bank response to read, so
+			// treat it like a bank header error: not submitted, Pay stays available.
+			const catalystError = catalystResponse?.status === "error"
+				? String(catalystResponse.message || "Payment service error.").trim()
+				: "";
+			const headerError = String(header.Error || header.error || "").trim() || catalystError;
 			const directCode = String(root?.StatusCode || root?.statusCode || "").trim().toUpperCase();
 			const directDesc = String(root?.StatusDesc || root?.statusDesc || "").trim();
 			const batchRefNo = root?.BatchRefNo || root?.batchRefNo || header.BatchRefNo || "";
@@ -1089,7 +1451,7 @@
 						statusCode: directCode,
 						batchRefNo,
 						batchId: payload?.multiPayReq?.header?.BatchId || ""
-					});
+					}, false);
 					return;
 				}
 
@@ -1114,13 +1476,23 @@
 						custRefNo: tx.CustRefNo || payment.custRefNo || existing.custRefNo || "",
 						ibLRefNo: tx.IBLRefNo || existing.ibLRefNo || "",
 						batchId: payload?.multiPayReq?.header?.BatchId || "",
-						submittedAt: existing.submittedAt || new Date().toISOString(),
-						lastSubmissionResponse: catalystResponse
-					}
+						submittedAt: existing.submittedAt || new Date().toISOString()
+						// NOTE: the full Catalyst/bank response is intentionally NOT
+						// stored here — it's several KB (encrypted blobs, raw payload,
+						// etc.) and every field the UI shows (statusCode, statusDesc,
+						// batchRefNo, custRefNo, ibLRefNo, ...) is already captured
+						// above. Keeping the whole response pushed this record's
+						// JSON past the Data Store Text field's 10,000 character
+						// limit, which made the save fail silently.
+					},
+					false
 				);
 			});
 
-			savePaymentStatuses();
+			// One save for the whole batch instead of one per payment — avoids
+			// firing several overlapping requests whose responses could land
+			// out of order and clobber each other.
+			await savePaymentStatuses();
 			updateStatusScheduler();
 
 			return {
@@ -1392,18 +1764,21 @@
 			return responseBody;
 		}
 
-		async function fetchAndApplyPaymentStatus(paymentId) {
+		async function fetchAndApplyPaymentStatus(paymentId, options = {}) {
 			if (!isStatusCheckAllowed(paymentId)) {
 				throw new Error("Status is available only after Pay and Batch Received.");
 			}
 			const existing = paymentStatusMap.get(String(paymentId)) || {};
 
+			// Temporary UI state only — not saved, so a closed widget never
+			// leaves "Checking..." behind on the server.
 			setPaymentStatus(
 				paymentId,
 				"pending",
 				"Checking...",
 				"Fetching latest payment status.",
-				existing
+				existing,
+				false
 			);
 			renderPage();
 
@@ -1416,7 +1791,7 @@
 				 * Store the complete bank response information so the UI
 				 * can show StatusDesc / Header.Error and UTR details later.
 				 */
-				setPaymentStatus(
+				await setPaymentStatus(
 					paymentId,
 					status.state,
 					status.label,
@@ -1436,35 +1811,36 @@
 						custRefNo: status.custRefNo || existing.custRefNo || "",
 						utr: status.utr || "",
 						paymentDate: status.paymentDate || "",
-						beneficiaryName: status.beneficiaryName || "",
+						beneficiaryName: status.beneficiaryName || ""
 
-						lastEnquiryResponse: result
+						// NOTE: the full bank enquiry response is intentionally NOT
+						// stored — same reason as lastSubmissionResponse above: it's
+						// large and every field the UI shows is already captured.
 					}
 				);
 
 				renderPage();
 
-				showToast(
-					status.headerError
-						? `Error: ${status.headerError}`
-						: `${status.label}: ${status.message}`,
-					status.state === "success"
-						? "success"
-						: status.state === "failed"
-							? "danger"
-							: "warning"
-				);
+				if (!options.silent) {
+					showToast(
+						status.headerError
+							? `Error: ${status.headerError}`
+							: `${status.label}: ${status.message}`,
+						status.state === "success"
+							? "success"
+							: status.state === "failed"
+								? "danger"
+								: "warning"
+					);
+				}
 
 				return result;
 			} catch (error) {
-				setPaymentStatus(
-					paymentId,
-					"failed",
-					"Status Error",
-					error.message || "Unable to fetch payment status.",
-					existing
-				);
-
+				// The enquiry call failed (network / service error) — that says
+				// nothing about the payment itself. Restore the previous status so
+				// the payment stays "pending" and keeps being checked, instead of
+				// being marked failed forever.
+				paymentStatusMap.set(String(paymentId), existing);
 				renderPage();
 				throw error;
 			}
@@ -1485,7 +1861,7 @@
 
 			try {
 				const results = await Promise.allSettled(
-					ids.map(id => fetchAndApplyPaymentStatus(id))
+					ids.map(id => fetchAndApplyPaymentStatus(id, { silent: true }))
 				);
 
 				const failed = results.filter(
@@ -1494,11 +1870,14 @@
 
 				const successful = results.length - failed;
 
-				showToast(
-					`Status fetched for ${successful} payment(s)` +
-					(failed ? `, ${failed} failed.` : "."),
-					failed ? "warning" : "success"
-				);
+				// Scheduled background checks stay quiet unless something failed.
+				if (!options.silent || failed) {
+					showToast(
+						`Status fetched for ${successful} payment(s)` +
+						(failed ? `, ${failed} failed.` : "."),
+						failed ? "warning" : "success"
+					);
+				}
 			} finally {
 				updateBulkBar();
 				renderPage();
@@ -1539,7 +1918,14 @@
 					console.warn("Could not hydrate state from Catalyst", error);
 				}
 
+				try {
+					await hydratePaidRecords();
+				} catch (error) {
+					console.warn("Could not load Paid records from Catalyst", error);
+				}
+
 				loadPaymentStatuses();
+				loadTrackedPayments();
 				if (typeof loadFilterSettings === "function") loadFilterSettings();
 				if (typeof loadManualPayments === "function") loadManualPayments();
 				if (typeof renderManualHistory === "function") renderManualHistory();
@@ -1573,10 +1959,12 @@
 			document.getElementById('selectAllChk').addEventListener('change', (e) => {
 				const pageItems = getPageItems();
 				pageItems.forEach(p => {
+					const id = String(p.payment_id);
+					if (isPaymentAlreadySubmitted(id)) return;
 					if (e.target.checked) {
-						selectedIds.add(p.payment_id);
+						selectedIds.add(id);
 					} else {
-						selectedIds.delete(p.payment_id);
+						selectedIds.delete(id);
 					}
 				});
 				renderPage();
@@ -1608,7 +1996,17 @@
 
 				console.log({ payments });
 
-				allDraftPayments = payments;
+				// Payments we've already submitted to the bank fall out of the
+				// Status.Draft filter above once Zoho's /submit runs. Carry
+				// them over from the tracked cache so the row (and its bank
+				// status) doesn't disappear on refresh.
+				const freshIds = new Set(payments.map(p => String(p.payment_id)));
+				const carriedOver = trackedPaymentsCache.filter(p =>
+					!freshIds.has(String(p.payment_id)) &&
+					paymentStatusMap.has(String(p.payment_id))
+				);
+
+				allDraftPayments = [...payments, ...carriedOver];
 				currentPage = 1;
 				selectedIds.clear();
 
@@ -1616,6 +2014,7 @@
 
 				if (allDraftPayments.length === 0) {
 					showEmpty('No draft payments found.');
+					if (typeof done === "function") done();
 					return;
 				}
 
@@ -2015,6 +2414,39 @@
 				return;
 			}
 
+			try {
+				assertPaymentStateLoaded();
+			} catch (error) {
+				showToast(error.message, "danger");
+				return;
+			}
+
+			// A payment already submitted to the bank must never be sent twice.
+			const requestedIds = [...new Set(paymentIds.map(String))];
+			const blockedIds = requestedIds.filter(isPaymentAlreadySubmitted);
+			paymentIds = requestedIds.filter(id => !isPaymentAlreadySubmitted(id));
+
+			if (blockedIds.length) {
+				showToast(
+					`${blockedIds.length} payment(s) were already submitted to the bank and were skipped.`,
+					"warning"
+				);
+			}
+
+			if (paymentIds.length === 0) {
+				return;
+			}
+
+			// Snapshot the rows now so they keep showing (with their bank
+			// status) once Zoho moves them out of the Draft filter after submit.
+			const snapshots = paymentIds
+				.map(id => allDraftPayments.find(p => String(p.payment_id) === id))
+				.filter(Boolean);
+
+			if (snapshots.length) {
+				await rememberTrackedPayments(snapshots);
+			}
+
 			const payButtons = document.querySelectorAll(
 				".row-pay-btn, #paySelectedBtn, .row-status-btn, #fetchSelectedStatusBtn"
 			);
@@ -2043,13 +2475,20 @@
 				 *
 				 * Therefore this is NOT final payment success.
 				 */
-				const bankStatus = applyCatalystSubmissionStatus(
+				const bankStatus = await applyCatalystSubmissionStatus(
 					paymentIds,
 					catalystResponse,
 					payload
 				);
 
 				renderPage();
+
+				// Bank (or the payment service) rejected the batch: nothing was
+				// submitted, so don't touch Zoho Books. Pay stays available.
+				if (bankStatus.error) {
+					showToast(`Payment not submitted: ${bankStatus.error}`, "danger");
+					return;
+				}
 
 				showToast(
 					`${paymentIds.length} payment(s) submitted. ` +
@@ -2093,14 +2532,22 @@
 					error
 				);
 
-				paymentIds.forEach(id => {
-					setPaymentStatus(
-						id,
-						"failed",
-						"Submission Failed",
-						error.message || "Payment submission failed."
-					);
-				});
+				// Only mark payments that were NOT accepted by the bank — never
+				// overwrite a real "submitted" status (that flag is what blocks a
+				// second payment of the same bill).
+				paymentIds
+					.filter(id => !isPaymentAlreadySubmitted(id))
+					.forEach(id => {
+						setPaymentStatus(
+							id,
+							"failed",
+							"Submission Failed",
+							error.message || "Payment submission failed.",
+							{},
+							false
+						);
+					});
+				await savePaymentStatuses();
 
 				renderPage();
 
@@ -2221,7 +2668,12 @@
 			const pageItems = getPageItems();
 
 			pageItems.forEach((p) => {
-				const isChecked = selectedIds.has(String(p.payment_id));
+				const rowId = String(p.payment_id);
+				const isChecked = selectedIds.has(rowId);
+				const alreadySubmitted = isPaymentAlreadySubmitted(rowId);
+				const bankState = paymentStatusMap.get(rowId)?.state;
+				const isPaid = paidDraftMap.has(rowId);
+				const canMarkPaid = !isPaid && alreadySubmitted && bankState === "success";
 
 				const li = document.createElement('li');
 				li.className = 'list-group-item';
@@ -2230,7 +2682,8 @@
 					<input class="form-check-input row-chk"
 						type="checkbox"
 						data-id="${escapeHtml(p.payment_id)}"
-						${isChecked ? 'checked' : ''}>
+						${isChecked ? 'checked' : ''}
+						${alreadySubmitted ? 'disabled title="Already submitted to the bank"' : ''}>
 
 					<div class="pm-info">
 						<div class="pm-number">
@@ -2274,21 +2727,72 @@
 							type="button"
 							class="btn btn-sm btn-outline-secondary row-status-btn"
 							data-status-id="${escapeHtml(p.payment_id)}"
-                           
-                            title="${isStatusCheckAllowed(p.payment_id) ? "Fetch latest bank status" : "Available only after Pay and Batch Received"}">
+							${isStatusCheckAllowed(p.payment_id) ? '' : 'disabled'}
+							title="${isStatusCheckAllowed(p.payment_id) ? "Fetch latest bank status" : "Available only after Pay and Batch Received"}">
 							↻ Status
 						</button>
 
-						<button
-							type="button"
-							class="btn btn-sm btn-outline-success row-pay-btn"
-							data-id="${escapeHtml(p.payment_id)}">
-							Pay
-						</button>
+						${isPaid
+						? `<span class="payment-status success" title="Marked Paid on ${escapeHtml(paidDraftMap.get(rowId)?.PaidAt || '')}">✓ Paid</span>`
+						: canMarkPaid
+							? `<button
+									type="button"
+									class="btn btn-sm btn-success row-markpaid-btn"
+									data-id="${escapeHtml(p.payment_id)}">
+									Mark Paid
+								</button>`
+							: alreadySubmitted
+								? ''
+								: `<button
+									type="button"
+									class="btn btn-sm btn-outline-success row-pay-btn"
+									data-id="${escapeHtml(p.payment_id)}">
+									Pay
+								</button>`
+					}
 					</div>
 				`;
 
 				listEl.appendChild(li);
+			});
+
+			listEl.querySelectorAll('.row-markpaid-btn').forEach(btn => {
+				btn.addEventListener('click', async (e) => {
+					const button = e.currentTarget;
+					const id = String(button.getAttribute('data-id'));
+					const payment = allDraftPayments.find(p => String(p.payment_id) === id);
+
+					if (!payment) {
+						showToast("Payment not found.", "danger");
+						return;
+					}
+
+					if (!confirm(
+						`Mark payment ${payment.payment_number || id} as Paid?\n\n` +
+						`This appends a note to the Zoho Books record and stores a Paid ` +
+						`marker in SharePoint (auto-removed after 1 day).`
+					)) {
+						return;
+					}
+
+					button.disabled = true;
+					button.innerText = "Marking...";
+
+					try {
+						const { booksError } = await markDraftPaymentPaid(payment);
+						showToast(
+							booksError
+								? `Marked Paid, but updating Zoho Books failed: ${booksError}`
+								: "Payment marked Paid.",
+							booksError ? "warning" : "success"
+						);
+						renderPage();
+					} catch (error) {
+						showToast(error.message || "Could not mark payment as Paid.", "danger");
+						button.disabled = false;
+						button.innerText = "Mark Paid";
+					}
+				});
 			});
 
 			listEl.querySelectorAll('.row-chk').forEach(chk => {
@@ -2314,6 +2818,11 @@
 					); const payment = allDraftPayments.find(p => String(p.payment_id) === id);
 					if (!payment) {
 						showToast("Payment not found.", "danger");
+						return;
+					}
+
+					if (isPaymentAlreadySubmitted(id)) {
+						showToast("This payment has already been submitted to the bank.", "warning");
 						return;
 					}
 
@@ -2452,9 +2961,13 @@
 				currentPage === totalPages
 			);
 
+			// Only rows that can still be paid are selectable.
+			const selectableOnPage = pageItems.filter(
+				p => !isPaymentAlreadySubmitted(String(p.payment_id))
+			);
 			const allOnPageSelected =
-				pageItems.length > 0 &&
-				pageItems.every(p =>
+				selectableOnPage.length > 0 &&
+				selectableOnPage.every(p =>
 					selectedIds.has(
 						String(p.payment_id)
 					)
@@ -2498,7 +3011,8 @@
 		}
 
 		function saveManualPayments() {
-			catalystStateSet(MANUAL_PAYMENTS_KEY, manualPayments);
+			manualPayments = trimArrayToFit(manualPayments, "Manual payments");
+			return catalystStateSet(MANUAL_PAYMENTS_KEY, manualPayments);
 		}
 
 		function readManualForm() {
@@ -2592,6 +3106,7 @@
 
 			let payload;
 			try {
+				assertPaymentStateLoaded();
 				payload = buildManualMultiPayPayload(form);
 			} catch (error) {
 				showToast(error.message, "danger");
@@ -2641,33 +3156,41 @@
 
 				manualPayments.unshift(record);
 				manualCurrentPage = 1;
-				saveManualPayments();
 
-				const bankStatus = applyCatalystSubmissionStatus([manualId], responseBody, payload);
+				const bankStatus = await applyCatalystSubmissionStatus([manualId], responseBody, payload);
+				await saveManualPayments();
 
 				renderManualHistory();
-				resetManualForm();
 
-				showToast(
-					`Manual payment submitted. ${bankStatus.statusDesc}` +
-					(bankStatus.batchRefNo ? ` (${bankStatus.batchRefNo})` : ""),
-					bankStatus.error ? "danger" : "success"
-				);
+				if (bankStatus.error) {
+					// Keep the form filled so the user can correct and retry.
+					showToast(`Manual payment not submitted: ${bankStatus.error}`, "danger");
+				} else {
+					resetManualForm();
+					showToast(
+						`Manual payment submitted. ${bankStatus.statusDesc}` +
+						(bankStatus.batchRefNo ? ` (${bankStatus.batchRefNo})` : ""),
+						"success"
+					);
+				}
 			} catch (error) {
 				console.error("Manual payment failed:", error);
 
 				if (!manualPayments.some(x => x.id === manualId)) {
 					manualPayments.unshift(record);
 					manualCurrentPage = 1;
-					saveManualPayments();
+					await saveManualPayments();
 				}
 
-				setPaymentStatus(
-					manualId,
-					"failed",
-					"Submission Failed",
-					error.message || "Manual payment submission failed."
-				);
+				// Never overwrite a status the bank already accepted.
+				if (!isPaymentAlreadySubmitted(manualId)) {
+					await setPaymentStatus(
+						manualId,
+						"failed",
+						"Submission Failed",
+						error.message || "Manual payment submission failed."
+					);
+				}
 
 				renderManualHistory();
 				showToast(error.message || "Manual payment submission failed.", "danger");
@@ -2715,11 +3238,14 @@
 			const pageItems = manualPayments.slice(start, start + MANUAL_PAGE_SIZE);
 
 			wrap.innerHTML = pageItems.map(m => {
-				const st = paymentStatusMap.get(String(m.id));
+				const rowId = String(m.id);
+				const st = paymentStatusMap.get(rowId);
 				const allowed = isStatusCheckAllowed(m.id);
 				const detail = st ? (st.headerError || st.statusDesc || st.message || "") : "";
 				const amount = Number(m.amount || 0)
 					.toLocaleString("en-IN", { minimumFractionDigits: 2 });
+				const isPaid = paidManualMap.has(rowId);
+				const canMarkPaid = !isPaid && st?.state === "success";
 
 				return `
 					<li class="list-group-item">
@@ -2754,6 +3280,22 @@
 								title="Copy these details into the form above">
 								&#8593; Use details
 							</button>
+							${isPaid
+						? `<span class="payment-status success" title="Marked Paid on ${escapeHtml(paidManualMap.get(rowId)?.PaidAt || '')}">✓ Paid</span>
+								<button type="button"
+									class="btn btn-sm btn-outline-danger manual-delete-paid-btn"
+									data-id="${escapeHtml(m.id)}"
+									title="Delete this Paid record from SharePoint">
+									Delete
+								</button>`
+						: canMarkPaid
+							? `<button type="button"
+									class="btn btn-sm btn-success manual-markpaid-btn"
+									data-id="${escapeHtml(m.id)}">
+									Mark Paid
+								</button>`
+							: ""
+					}
 						</div>
 					</li>
 				`;
@@ -2782,6 +3324,68 @@
 					const id = e.currentTarget.getAttribute("data-id");
 					const record = manualPayments.find(x => String(x.id) === String(id));
 					fillManualFormFromRecord(record);
+				});
+			});
+
+			wrap.querySelectorAll(".manual-markpaid-btn").forEach(btn => {
+				btn.addEventListener("click", async (e) => {
+					const button = e.currentTarget;
+					const id = String(button.getAttribute("data-id"));
+					const record = manualPayments.find(x => String(x.id) === id);
+
+					if (!record) {
+						showToast("Manual payment not found.", "danger");
+						return;
+					}
+
+					if (!confirm(
+						"Mark this manual payment as Paid?\n\n" +
+						"A Paid marker is stored in SharePoint (auto-removed after 1 day, " +
+						"or delete it yourself any time)."
+					)) {
+						return;
+					}
+
+					button.disabled = true;
+					button.innerText = "Marking...";
+
+					try {
+						await markManualPaymentPaid(record);
+						showToast("Manual payment marked Paid.", "success");
+						renderManualHistory();
+					} catch (error) {
+						showToast(error.message || "Could not mark payment as Paid.", "danger");
+						button.disabled = false;
+						button.innerText = "Mark Paid";
+					}
+				});
+			});
+
+			wrap.querySelectorAll(".manual-delete-paid-btn").forEach(btn => {
+				btn.addEventListener("click", async (e) => {
+					const button = e.currentTarget;
+					const id = String(button.getAttribute("data-id"));
+
+					if (!confirm(
+						"Delete this Paid record from SharePoint?\n\n" +
+						"This only removes the Paid marker in SharePoint — it does not " +
+						"affect the bank submission or its status."
+					)) {
+						return;
+					}
+
+					button.disabled = true;
+					button.innerText = "Deleting...";
+
+					try {
+						await deleteManualPaidRecord(id);
+						showToast("Paid record deleted.", "success");
+						renderManualHistory();
+					} catch (error) {
+						showToast(error.message || "Could not delete the Paid record.", "danger");
+						button.disabled = false;
+						button.innerText = "Delete";
+					}
 				});
 			});
 

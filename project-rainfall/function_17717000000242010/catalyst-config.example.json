@@ -1,0 +1,17 @@
+{
+	"deployment": {
+		"name": "project_rainfall_function",
+		"stack": "node24",
+		"type": "advancedio",
+		"env_variables": {
+			"SP_TENANT_ID": "<Directory (tenant) ID>",
+			"SP_CLIENT_ID": "<Application (client) ID>",
+			"SP_CLIENT_SECRET": "<client secret value>",
+			"SP_SITE_HOSTNAME": "wpsindia.sharepoint.com",
+			"SP_SITE_PATH": "/sites/BankBook"
+		}
+	},
+	"execution": {
+		"main": "index.js"
+	}
+}

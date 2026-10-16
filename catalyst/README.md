@@ -67,3 +67,94 @@ catalyst deploy --only functions
 - Moving to Production: `catalyst deploy --only functions --production`, then change
   `CATALYST_BASE_URL` (and the existing payment/enquiry URLs) in `app/widget.html`
   from `.development.` to `.production.`.
+
+---
+
+# Paid payments — Catalyst NoSQL (`paidpayments`)
+
+A second, separate store for the **Paid** workflow in both tabs. Deliberately
+**not** part of `AppState` above — every row here is written only when a user
+explicitly marks a payment Paid, and Catalyst deletes each row on its own
+**~1 day** after it's written (native NoSQL table TTL — no cron job needed).
+
+| Field | Type | Notes |
+|---|---|---|
+| `Source` | String | Partition key — `"draft"` or `"manual"` |
+| `PaymentId` | String | Sort key — the Zoho payment_id (draft) or manual record id |
+| `PaymentNumber` | String | display only |
+| `VendorName` | String | display only |
+| `Amount` | String | display only |
+| `UTR` | String | bank UTR, if the status enquiry returned one |
+| `PaidAt` | String | ISO timestamp, when marked Paid |
+| `ExpireAt` | Number | epoch **seconds** = PaidAt + 86400 — the TTL attribute |
+
+## One-time step — create the NoSQL table
+
+Not creatable from code or the CLI (no `nosql` CLI command exists). Do this once
+in the **Catalyst console**:
+
+**project-rainfall → NoSQL → Create Table**
+
+1. Table name: `PaidPayments`
+2. Partition key: `Source` — type **String**
+3. Sort key: `PaymentId` — type **String**
+4. Enable **TTL** (may be labelled "Time To Live" / "Auto Expiry") → TTL attribute: `ExpireAt`
+5. Create.
+
+⚠️ **Verify the TTL unit** when you enable it — the code writes epoch
+**seconds** (`Math.floor(Date.now() / 1000) + 86400`), matching DynamoDB-style
+TTL, which is the common convention. If the console says the TTL attribute
+expects **milliseconds** instead, change that one line in
+`project-rainfall/function_17717000000242010/index.js` (`POST /paidpayments`)
+to `Date.now() + PAID_TTL_SECONDS * 1000`, then redeploy.
+
+TTL sweeps are periodic, not instant — an expired row can take a while (up to
+a few hours, sometimes) to actually disappear; that's normal.
+
+## Endpoints
+
+```
+POST /paidpayments          { source, paymentId, paymentNumber, vendorName, amount, utr }
+                             -> { status: "success", source, paymentId, paidAt, expireAt }
+                             (upsert — calling it again for the same source+paymentId just refreshes it)
+
+GET  /paidpayments?source=  -> { status: "success", source, items: [...] }
+
+POST /paidpayments/delete   { source, paymentId }
+                             -> { status: "success", source, paymentId, deleted: true }
+```
+
+## Verify
+
+```bash
+BASE=https://project-rainfall-60040525184.development.catalystserverless.in/server/project_rainfall_function
+
+curl -s "$BASE/paidpayments?source=draft"
+# before the table exists -> {"status":"error","message":"No such table with the given id exists"}
+# after                    -> {"status":"success","source":"draft","items":[]}
+
+curl -s -X POST "$BASE/paidpayments" -H "Content-Type: application/json" \
+  -d '{"source":"draft","paymentId":"TEST123","paymentNumber":"PMT-1","vendorName":"Test Vendor","amount":"1000","utr":"UTR12345"}'
+
+curl -s "$BASE/paidpayments?source=draft"
+# -> should list the TEST123 row
+
+curl -s -X POST "$BASE/paidpayments/delete" -H "Content-Type: application/json" \
+  -d '{"source":"draft","paymentId":"TEST123"}'
+```
+
+## What the widget does with it
+
+- **Books Draft Payments tab**: once a row's bank status is `success`, a
+  **Mark Paid** button appears in place of the Pay/Submitted button. Clicking
+  it (after a confirm) appends a note to the Zoho Books vendor payment's
+  **Description** (`Paid via IndusInd Bank — UTR: <utr> on <date>`; existing
+  description is kept, never overwritten) — best-effort, a failure there is
+  toasted but does **not** block the Catalyst write — then writes the
+  `PaidPayments` row. The row then shows a green **✓ Paid** badge instead of
+  a button. If you revisit after the ~1 day TTL has cleared that row, the
+  badge/button state just reverts to whatever the bank status still says.
+- **Manual Payment tab**: same Mark Paid button on `success` rows, **Catalyst
+  only** (no Books record exists for a manual payment). Once Paid, the row
+  shows **✓ Paid** + a **Delete** button that removes that `PaidPayments` row
+  immediately (`POST /paidpayments/delete`) instead of waiting for the TTL.

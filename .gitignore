@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+
+# Build output (recreate with: zet pack)
+dist/
+
+# Secrets — function config holds the SharePoint client secret.
+# Copy catalyst-config.example.json -> catalyst-config.json and fill in locally.
+project-rainfall/**/catalyst-config.json
+.env
+.env.*
+
+# Catalyst CLI local state
+project-rainfall/.build/
+project-rainfall/**/.catalyst/
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
